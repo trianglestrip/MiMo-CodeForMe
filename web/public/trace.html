@@ -722,7 +722,10 @@
 
     async function checkHealth() {
       try {
-        const res = await fetch(withDir('/global/health'), { cache: 'no-store' })
+        const res = await fetch(withDir('/global/health'), {
+          cache: 'no-store',
+          headers: { Authorization: authHeader() },
+        })
         const ok = res.ok
         mimoDot.className = 'dot ' + (ok ? 'ok' : 'bad')
         mimoStatus.textContent = ok ? 'mimo serve 就绪' : `health ${res.status}`

@@ -38,6 +38,13 @@ tsconfig.tsbuildinfo
 *.pid
 .mimo-worktrees
 .mimocode/
+distWebServer/web/*
+!distWebServer/web/.gitkeep
+distWebServer/server/mimo.exe
+distWebServer/server/_pack/
+distWebServer/server/node_modules/
+distWebServer/work/
+distWebServer/.dev-home/
 
 # experiment run artifacts (regenerated per run, not source)
 experiment/*.log

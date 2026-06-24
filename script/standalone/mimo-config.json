@@ -1,0 +1,4 @@
+{
+  "model": "mimo/mimo-auto",
+  "disabled_providers": ["opencode", "opencode-go"]
+}

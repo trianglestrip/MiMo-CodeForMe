@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted, ref } from 'vue'
-import { apiUrl, mimoConfig } from '@/lib/mimo/config'
+import { apiUrl, authHeader, mimoConfig } from '@/lib/mimo/config'
 
 export type LinkStatus = 'checking' | 'ok' | 'fail'
 
@@ -22,6 +22,7 @@ async function checkMimo(): Promise<{ ok: boolean; port: string; detail?: string
   try {
     const res = await fetch(apiUrl('/global/health'), {
       cache: 'no-store',
+      headers: { Authorization: authHeader() },
     })
     if (res.ok) return { ok: true, port }
     return { ok: false, port, detail: `HTTP ${res.status}` }

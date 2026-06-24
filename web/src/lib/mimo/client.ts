@@ -9,7 +9,11 @@ export async function waitForMimoReady(timeoutMs = 15_000): Promise<void> {
   const healthUrl = apiUrl('/global/health')
   while (Date.now() < deadline) {
     try {
-      const res = await fetchWithTimeout(healthUrl, { cache: 'no-store' }, 8_000)
+      const res = await fetchWithTimeout(
+        healthUrl,
+        { cache: 'no-store', headers: { Authorization: authHeader() } },
+        8_000,
+      )
       if (res.ok) return
     } catch {
       // retry
