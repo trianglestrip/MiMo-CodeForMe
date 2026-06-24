@@ -3,6 +3,9 @@ import desktopPlugin from "./vite"
 
 export default defineConfig({
   plugins: [desktopPlugin] as any,
+  css: {
+    transformer: "lightningcss",
+  },
   server: {
     host: "0.0.0.0",
     allowedHosts: true,

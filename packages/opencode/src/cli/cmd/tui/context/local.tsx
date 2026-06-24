@@ -188,6 +188,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
+        if (isModelValid({ providerID: "mimo", modelID: "mimo-auto" })) {
+          return { providerID: "mimo", modelID: "mimo-auto" }
+        }
+
         const provider = sync.data.provider[0]
         if (!provider) return undefined
         const defaultModel = sync.data.provider_default[provider.id]

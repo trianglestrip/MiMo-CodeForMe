@@ -45,3 +45,5 @@ experiment/last-outcome.json
 
 /mimoapi/
 /packages/opencode/src/ext
+/script/mimo-run.exe
+/script/mimo-run

@@ -316,8 +316,10 @@ export default function Layout(props: ParentProps) {
 
   const navigateWithSidebarReset = (href: string) => {
     clearSidebarHoverState()
-    navigate(href)
-    layout.mobileSidebar.hide()
+    queueMicrotask(() => {
+      navigate(href)
+      layout.mobileSidebar.hide()
+    })
   }
 
   function cycleTheme(direction = 1) {
@@ -2268,7 +2270,7 @@ export default function Layout(props: ParentProps) {
                           class="size-full flex flex-col py-2 gap-4 overflow-y-auto no-scrollbar [overflow-anchor:none]"
                         >
                           <SortableProvider ids={workspaces()}>
-                            <For each={workspaces()}>
+                            <For each={workspaces()} by={(directory) => directory}>
                               {(directory) => (
                                 <SortableWorkspace
                                   ctx={workspaceSidebarCtx}

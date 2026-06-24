@@ -239,22 +239,24 @@ export async function bootstrapDirectory(input: {
   const loading = input.store.status !== "complete"
   const seededProject = projectID(input.directory, input.global.project)
   const seededPath = input.global.path.directory === input.directory ? input.global.path : undefined
-  if (seededProject) input.setStore("project", seededProject)
-  if (seededPath) input.setStore("path", seededPath)
-  if (input.store.provider.all.length === 0 && input.global.provider.all.length > 0) {
-    input.setStore("provider", input.global.provider)
-  }
-  if (Object.keys(input.store.config).length === 0 && Object.keys(input.global.config).length > 0) {
-    input.setStore("config", input.global.config)
-  }
-  if (loading || input.store.provider.all.length === 0) {
-    input.setStore("provider_ready", false)
-  }
-  input.setStore("mcp_ready", false)
-  input.setStore("mcp", {})
-  input.setStore("lsp_ready", false)
-  input.setStore("lsp", [])
-  if (loading) input.setStore("status", "partial")
+  batch(() => {
+    if (seededProject) input.setStore("project", seededProject)
+    if (seededPath) input.setStore("path", seededPath)
+    if (input.store.provider.all.length === 0 && input.global.provider.all.length > 0) {
+      input.setStore("provider", input.global.provider)
+    }
+    if (Object.keys(input.store.config).length === 0 && Object.keys(input.global.config).length > 0) {
+      input.setStore("config", input.global.config)
+    }
+    if (loading || input.store.provider.all.length === 0) {
+      input.setStore("provider_ready", false)
+    }
+    input.setStore("mcp_ready", false)
+    input.setStore("mcp", {})
+    input.setStore("lsp_ready", false)
+    input.setStore("lsp", [])
+    if (loading) input.setStore("status", "partial")
+  })
 
   const rev = (providerRev.get(input.directory) ?? 0) + 1
   providerRev.set(input.directory, rev)
