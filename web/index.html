@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MiMoCode Web</title>
+    <script>
+      // 默认 IPv4：localhost / [::1] 自动跳转到 127.0.0.1
+      (function () {
+        var h = location.hostname;
+        if (h === 'localhost' || h === '[::1]') {
+          location.replace(location.href.replace(h, '127.0.0.1'));
+        }
+      })();
+      // Apply theme immediately to prevent flash
+      const theme = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

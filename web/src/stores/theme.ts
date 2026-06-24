@@ -1,0 +1,31 @@
+import { ref, watch } from 'vue'
+import { defineStore } from 'pinia'
+
+export type Theme = 'light' | 'dark'
+
+export const useThemeStore = defineStore('theme', () => {
+  // Default to dark theme
+  const savedTheme = localStorage.getItem('theme') as Theme
+  const current = ref<Theme>(savedTheme || 'dark')
+
+  function toggle() {
+    current.value = current.value === 'light' ? 'dark' : 'light'
+  }
+
+  function set(theme: Theme) {
+    current.value = theme
+  }
+
+  function applyTheme(theme: Theme) {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }
+
+  // Apply theme immediately on store creation
+  applyTheme(current.value)
+
+  // Watch for changes
+  watch(current, applyTheme)
+
+  return { current, toggle, set }
+})
