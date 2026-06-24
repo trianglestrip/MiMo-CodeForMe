@@ -7,6 +7,7 @@ set "WEB_PORT=5173"
 set "WORK_DIR=%CD%"
 
 if not "%~1"=="" set "WORK_DIR=%~1"
+set "WORK_DIR_URL=%WORK_DIR:\=/%"
 
 echo === MiMoCode Web + mimo serve ===
 echo   MiMo serve: http://127.0.0.1:%MIMO_PORT%
@@ -32,14 +33,30 @@ cd /d "%~dp0..\web"
 if not exist node_modules (
   echo [INFO] npm install ...
   call npm install
-  if errorlevel 1 goto Fail
+  if errorlevel 1 (
+    echo [ERROR] npm install failed.
+    pause
+    exit /b 1
+  )
 )
 
-echo [INFO] Free port %MIMO_PORT% ...
+echo [INFO] Free ports %MIMO_PORT% and %WEB_PORT% ...
 for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":%MIMO_PORT%" ^| findstr "LISTENING"') do taskkill /F /PID %%P >nul 2>&1
+for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":%WEB_PORT%" ^| findstr "LISTENING"') do taskkill /F /PID %%P >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-start "MiMoCode Serve" cmd /k call "%~dp0start-mimo-serve.bat" "%WORK_DIR%" %MIMO_PORT%
+echo [INFO] Writing trace config ...
+(
+echo window.MIMO_TRACE_CONFIG = {
+echo   baseUrl: '/mimo',
+echo   username: 'mimocode',
+echo   password: 'mimocode-standalone',
+echo   workDir: '%WORK_DIR_URL%',
+echo }
+) > "%~dp0..\web\public\mimo-config.js"
+
+echo [INFO] Starting MiMo serve ...
+start "MiMo 4096" cmd /k call "%~dp0start-mimo-serve.bat" "%WORK_DIR%" %MIMO_PORT%
 
 echo [INFO] Waiting for MiMo serve ...
 set /a _W=0
@@ -52,41 +69,23 @@ timeout /t 1 /nobreak >nul
 goto WaitMimo
 
 :MimoReady
-echo [INFO] Writing trace config ...
-set "WORK_DIR_URL=%WORK_DIR:\=/%"
-(
-echo window.MIMO_TRACE_CONFIG = {
-echo   baseUrl: '/mimo',
-echo   username: 'mimocode',
-echo   password: 'mimocode-standalone',
-echo   workDir: '%WORK_DIR_URL%',
-echo }
-) > "%~dp0..\web\public\mimo-config.js"
+echo [INFO] Starting Web ...
+start "Web 5173" cmd /k call "%~dp0run-web-dev.bat" "%WORK_DIR_URL%"
 
-echo [INFO] Starting MiMoCode Web (Vite) ...
-start "MiMoCode Web" cmd /k "cd /d %~dp0..\web && set VITE_MIMO_WORK_DIR=%WORK_DIR% && npm run dev"
-
-echo [INFO] Waiting for Vite ...
+echo [INFO] Waiting for Web ...
 set /a _W=0
 :WaitWeb
 curl -s http://127.0.0.1:%WEB_PORT%/ 2>nul | findstr /C:"app" >nul 2>&1
-if not errorlevel 1 goto OpenBrowser
+if not errorlevel 1 goto Ready
 set /a _W+=1
-if !_W! GEQ 45 goto OpenBrowser
+if !_W! GEQ 45 goto Ready
 timeout /t 1 /nobreak >nul
 goto WaitWeb
 
-:OpenBrowser
+:Ready
 echo.
-echo [OK] Open http://127.0.0.1:%WEB_PORT%/ for chat
-echo      Open http://127.0.0.1:%WEB_PORT%/trace.html for call trace
-start "" "http://127.0.0.1:%WEB_PORT%/"
-echo.
-echo Close MiMoCode Serve and MiMoCode Web windows to stop.
-pause
+echo [OK] MiMo serve: http://127.0.0.1:%MIMO_PORT%/
+echo      Web ready:  http://127.0.0.1:%WEB_PORT%/
+echo      Trace:      http://127.0.0.1:%WEB_PORT%/trace.html
+echo      Close MiMo / Web windows to stop.
 exit /b 0
-
-:Fail
-echo [ERROR] Startup failed.
-pause
-exit /b 1

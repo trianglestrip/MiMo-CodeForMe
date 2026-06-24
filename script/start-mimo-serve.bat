@@ -9,7 +9,7 @@ set "WORK_DIR=%CD%"
 if not "%~1"=="" set "WORK_DIR=%~1"
 if not "%~2"=="" set "PORT=%~2"
 
-title MiMoCode Serve :%PORT%
+title MiMo 4096
 
 set "MIMOCODE_HOME=%CD%\.dev-home"
 if not exist "%MIMOCODE_HOME%" mkdir "%MIMOCODE_HOME%"
