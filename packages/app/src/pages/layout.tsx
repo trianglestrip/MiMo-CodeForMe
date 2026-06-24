@@ -2270,7 +2270,7 @@ export default function Layout(props: ParentProps) {
                           class="size-full flex flex-col py-2 gap-4 overflow-y-auto no-scrollbar [overflow-anchor:none]"
                         >
                           <SortableProvider ids={workspaces()}>
-                            <For each={workspaces()} by={(directory) => directory}>
+                            <For each={workspaces()}>
                               {(directory) => (
                                 <SortableWorkspace
                                   ctx={workspaceSidebarCtx}
