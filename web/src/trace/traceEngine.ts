@@ -23,6 +23,8 @@ interface DeltaBatch {
   text: string
 }
 
+export const UNKNOWN_TRACE_SESSION_ID = '_unknown'
+
 export function createTraceEngine(getWorkDir: () => string) {
   const sessions = shallowRef<TraceSession[]>([])
   const activeSessionID = ref<string | null>(
@@ -33,7 +35,9 @@ export function createTraceEngine(getWorkDir: () => string) {
   let deltaRaf: number | null = null
 
   const sortedSessions = computed(() =>
-    [...sessions.value].sort((a, b) => b.updatedAt - a.updatedAt),
+    [...sessions.value]
+      .filter((s) => s.id !== UNKNOWN_TRACE_SESSION_ID)
+      .sort((a, b) => b.createdAt - a.createdAt),
   )
 
   const activeSession = computed(() => {
@@ -67,7 +71,7 @@ export function createTraceEngine(getWorkDir: () => string) {
   }
 
   function getSession(sessionID?: string | null): TraceSession {
-    const id = sessionID || '_unknown'
+    const id = sessionID || UNKNOWN_TRACE_SESSION_ID
     let ses = sessions.value.find((s) => s.id === id)
     if (!ses) {
       ses = reactive({
@@ -273,16 +277,25 @@ export function createTraceEngine(getWorkDir: () => string) {
     startTurn(ses, q)
   }
 
-  function eventSessionID(raw: MimoBusEvent, part: Record<string, unknown>): string {
-    if (part.sessionID) return String(part.sessionID)
-    const p = raw.properties || {}
-    if (p.sessionID) return String(p.sessionID)
-    if (part.messageID) {
-      for (const ses of sessions.value) {
-        if (runtime(ses).messageRoles.has(String(part.messageID))) return ses.id
-      }
+  function resolveEventSession(
+    raw: MimoBusEvent,
+    part?: Record<string, unknown>,
+  ): TraceSession | null {
+    let sid: string | undefined
+    if (part && part.sessionID) sid = String(part.sessionID)
+    if (!sid) {
+      const p = raw.properties || {}
+      if (p.sessionID) sid = String(p.sessionID)
     }
-    return activeSessionID.value || '_unknown'
+    if (!sid && part?.messageID) {
+      const messageID = String(part.messageID)
+      for (const ses of sessions.value) {
+        if (runtime(ses).messageRoles.has(messageID)) return ses
+      }
+      return null
+    }
+    if (!sid) return null
+    return getSession(sid)
   }
 
   function extractUserText(info: Record<string, unknown>): string {
@@ -309,13 +322,16 @@ export function createTraceEngine(getWorkDir: () => string) {
 
     if (type === 'message.part.delta') {
       const props = raw.properties || {}
-      handleDelta(getSession(String(props.sessionID)), props)
+      const sid = props.sessionID
+      if (typeof sid !== 'string' || !sid) return
+      handleDelta(getSession(sid), props)
       return
     }
 
     if (type === 'session.error') {
       const sid = raw.properties?.sessionID
-      const ses = getSession(sid ? String(sid) : null)
+      if (!sid) return
+      const ses = getSession(String(sid))
       if (!canMutateTimeline(ses.id)) return
       upsertStep(ses, `err:${Date.now()}`, 'system', phaseTag('system'), String(raw.properties?.error || 'session error'), {
         done: true,
@@ -335,7 +351,8 @@ export function createTraceEngine(getWorkDir: () => string) {
 
     if (type === 'message.part.updated') {
       const part = (raw.properties?.part || {}) as Record<string, unknown>
-      const ses = getSession(eventSessionID(raw, part))
+      const ses = resolveEventSession(raw, part)
+      if (!ses) return
       registerPartKindLocal(ses, part)
       const role = part.messageID ? runtime(ses).messageRoles.get(String(part.messageID)) : undefined
       if (part.type === 'tool') {
@@ -353,7 +370,8 @@ export function createTraceEngine(getWorkDir: () => string) {
     if (type === 'message.updated') {
       const info = (raw.properties?.info || {}) as Record<string, unknown>
       const sid = info.sessionID || raw.properties?.sessionID
-      const ses = getSession(sid ? String(sid) : null)
+      if (!sid) return
+      const ses = getSession(String(sid))
       if (info.id && info.role) runtime(ses).messageRoles.set(String(info.id), String(info.role))
       if (info.role === 'user') {
         const text = extractUserText(info)
@@ -374,9 +392,13 @@ export function createTraceEngine(getWorkDir: () => string) {
 
   function replaySessionMessages(sessionID: string, messages: SessionMessage[]) {
     const ses = getSession(sessionID)
+    const scoped = messages.filter((msg) => {
+      const msid = msg.info?.sessionID
+      return !msid || msid === sessionID
+    })
     replayingSessionId = sessionID
     try {
-      for (const msg of messages) {
+      for (const msg of scoped) {
         const role = msg.info?.role
         if (msg.info?.id && role) runtime(ses).messageRoles.set(msg.info.id, role)
         if (role === 'user') {
@@ -390,14 +412,23 @@ export function createTraceEngine(getWorkDir: () => string) {
           if (msg.info?.id) runtime(ses).userMessages.add(msg.info.id)
         }
         if (role === 'assistant') {
-          if (!runtime(ses).currentTurn) startTurn(ses, '（历史回放）')
+          if (!runtime(ses).currentTurn) {
+            const last = ses.timeline[ses.timeline.length - 1]
+            if (last && last.steps.length === 0) {
+              runtime(ses).currentTurn = last
+              last.active = true
+              last.done = false
+            } else {
+              ensureTurn(ses)
+            }
+          }
           for (const part of msg.parts ?? []) {
             if (part.type === 'tool') handleTool(ses, part as Record<string, unknown>)
             else handleGenericPart(ses, { ...part, time: part.time ?? { end: Date.now() } })
           }
-          finishTurn(ses)
         }
       }
+      finishTurn(ses)
       ses.loaded = true
     } finally {
       replayingSessionId = null
@@ -424,9 +455,12 @@ export function createTraceEngine(getWorkDir: () => string) {
         ses.createdAt = entry.updatedAt
         changed = true
       }
-      if (entry.updatedAt && entry.updatedAt > ses.updatedAt) {
-        ses.updatedAt = entry.updatedAt
-        changed = true
+      if (entry.updatedAt) {
+        const nextUpdatedAt = existed ? Math.max(ses.updatedAt, entry.updatedAt) : entry.updatedAt
+        if (nextUpdatedAt !== ses.updatedAt) {
+          ses.updatedAt = nextUpdatedAt
+          changed = true
+        }
       }
     }
     if (changed) sessions.value = [...sessions.value]

@@ -25,3 +25,32 @@ export function sessionPageUrl(sessionID: string): string {
 export function shortSessionId(id: string): string {
   return id.length > 12 ? id.slice(-8) : id
 }
+
+const TURN_ACCENT_PALETTE = [
+  '#7c00ff',
+  '#ff6d00',
+  '#00c853',
+  '#2979ff',
+  '#00b0ff',
+  '#536dfe',
+  '#d500f9',
+  '#e91e63',
+  '#00bcd4',
+  '#8bc34a',
+  '#ff5722',
+  '#673ab7',
+]
+
+export function turnAccentColor(turnId: string): string {
+  let hash = 0
+  for (let i = 0; i < turnId.length; i++) hash = (hash * 31 + turnId.charCodeAt(i)) | 0
+  return TURN_ACCENT_PALETTE[Math.abs(hash) % TURN_ACCENT_PALETTE.length]
+}
+
+export function turnAccentStyle(turnId: string): Record<string, string> {
+  const accent = turnAccentColor(turnId)
+  return {
+    '--turn-accent': accent,
+    '--turn-accent-border': accent,
+  }
+}

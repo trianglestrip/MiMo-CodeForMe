@@ -43,13 +43,6 @@ function onSelect(id: string) {
         </ElMenu>
       </ElScrollbar>
     </ElMain>
-
-    <ElFooter class="shell-footer sidebar-bottom">
-      <ElAlert type="info" :closable="false" show-icon title="如何知道目录里有什么？">
-        Web 在顶部设置工作目录并传给后端；Agent 调用 <code>read</code> / <code>glob</code> / <code>bash</code>
-        等工具扫描该目录，再根据 listing 组织回答。
-      </ElAlert>
-    </ElFooter>
   </ElContainer>
 </template>
 
@@ -114,18 +107,5 @@ function onSelect(id: string) {
   color: var(--text-3);
   font-size: 10px;
   margin-top: 4px;
-}
-
-.sidebar-bottom {
-  padding: 0 16px 16px;
-  background: transparent;
-}
-
-.sidebar-bottom :deep(code) {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  background: var(--bg-3);
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
 }
 </style>

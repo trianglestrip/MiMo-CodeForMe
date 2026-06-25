@@ -28,12 +28,10 @@ const showPreview = computed(
 </script>
 
 <template>
-  <ElTimelineItem class="flow-step" :class="`step-${step.cls}`">
-    <template #dot>
-      <ElTag round size="small" class="step-num">{{ step.num }}</ElTag>
-    </template>
-
-    <div class="step-main">
+  <div class="trace-step" :class="`step-${step.cls}`">
+    <div class="step-line">
+      <span class="step-num">{{ step.num }}</span>
+      <div class="step-main">
       <div class="step-title">
         <ElTag size="small" :class="`phase-tag phase-${step.cls}`">
           <i :class="phaseTagIconClass(step.cls, step.key, step.title)" class="tag-icon" aria-hidden="true" />
@@ -60,32 +58,57 @@ const showPreview = computed(
       <ElTag v-if="step.sub" :type="subTagType" size="small" class="step-sub">
         {{ step.sub }}
       </ElTag>
+      </div>
     </div>
-  </ElTimelineItem>
+  </div>
 </template>
 
 <style scoped>
+.step-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
 .step-num {
-  min-width: 22px;
-  height: 22px;
-  padding: 0 4px;
-  font-size: 10px;
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  font-size: 9px;
   font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-2);
+}
+
+.step-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .step-title {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
-  font-size: 13px;
-  line-height: 1.45;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.35;
   color: var(--text);
 }
 
+.phase-tag {
+  height: 20px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
 .phase-tag .tag-icon {
-  margin-right: 0.25em;
-  font-size: 0.9em;
+  margin-right: 0.2em;
+  font-size: 0.85em;
 }
 
 .step-head-text {
@@ -95,50 +118,58 @@ const showPreview = computed(
 
 .step-intent {
   display: block;
-  margin-top: 4px;
-  line-height: 1.5;
+  margin-top: 2px;
+  line-height: 1.4;
+  font-size: 11px;
 }
 
 .step-input {
   display: block;
-  margin-top: 6px;
-  padding: 6px 8px;
+  margin-top: 4px;
+  padding: 4px 6px;
   background: var(--bg-3);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 10px;
   font-family: var(--font-mono);
   white-space: pre-wrap;
   word-break: break-all;
+  line-height: 1.4;
+  border: none;
 }
 
 .step-collapse {
-  margin-top: 6px;
+  margin-top: 4px;
   border: none;
 }
 
 .step-collapse :deep(.el-collapse-item__header) {
-  font-size: 12px;
-  height: 32px;
-  line-height: 32px;
+  font-size: 11px;
+  height: 26px;
+  line-height: 26px;
   border: none;
+  min-height: 26px;
 }
 
 .step-collapse :deep(.el-collapse-item__wrap) {
   border: none;
 }
 
+.step-collapse :deep(.el-collapse-item__content) {
+  padding-bottom: 0;
+}
+
 .step-preview {
   margin: 0;
-  padding: 8px 10px;
+  padding: 6px 8px;
   background: var(--code-bg);
   border: 1px solid var(--code-border);
   border-radius: var(--radius-sm);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-2);
-  max-height: 200px;
+  max-height: 160px;
   overflow-y: auto;
 }
 
@@ -157,11 +188,12 @@ const showPreview = computed(
 }
 
 .step-sub {
-  margin-top: 6px;
+  margin-top: 4px;
   max-width: 100%;
   height: auto;
   white-space: normal;
-  line-height: 1.45;
+  line-height: 1.35;
+  font-size: 10px;
 }
 
 @keyframes trace-blink {

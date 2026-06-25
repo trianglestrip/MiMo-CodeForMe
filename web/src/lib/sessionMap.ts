@@ -13,10 +13,12 @@ export type SessionMapEntry = {
 export type SessionMap = Record<string, SessionMapEntry>
 
 export function latestSessionIdFromMap(
-  map: Record<string, { sessionId?: string; updatedAt?: number }>,
+  map: Record<string, { sessionId?: string; updatedAt?: number; createdAt?: number }>,
 ): string | null {
   const entries = Object.values(map).filter((e) => e?.sessionId)
-  entries.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+  entries.sort(
+    (a, b) => (b.createdAt ?? b.updatedAt ?? 0) - (a.createdAt ?? a.updatedAt ?? 0),
+  )
   return entries[0]?.sessionId ?? null
 }
 

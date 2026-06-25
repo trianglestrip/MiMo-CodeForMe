@@ -118,7 +118,8 @@ export function useTracePage() {
 
   function onPopState() {
     const next = new URLSearchParams(location.search).get('session')
-    void timeline.loadSession(next)
+    if (next) void navigateToSession(next)
+    else void timeline.loadSession(null)
   }
 
   onUnmounted(() => {

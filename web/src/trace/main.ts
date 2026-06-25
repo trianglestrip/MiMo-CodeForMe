@@ -4,6 +4,7 @@ import '@/app.css'
 import './trace.css'
 import TraceApp from './TraceApp.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useThemeStore } from '@/stores/theme'
 import { registerClickOutside } from '@/directives/clickOutside'
 import { setupElementPlus } from '@/plugins/elementPlus'
 
@@ -14,13 +15,12 @@ import { setupElementPlus } from '@/plugins/elementPlus'
   }
 })()
 
-const theme = localStorage.getItem('theme') || 'dark'
-document.documentElement.setAttribute('data-theme', theme)
-document.documentElement.classList.toggle('dark', theme === 'dark')
-
 const app = createApp(TraceApp)
+const pinia = createPinia()
+
 registerClickOutside(app)
 setupElementPlus(app)
-app.use(createPinia())
-app.mount('#trace-app')
+app.use(pinia)
+useThemeStore()
 useSettingsStore().initWorkDir()
+app.mount('#trace-app')

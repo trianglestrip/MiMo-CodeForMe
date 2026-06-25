@@ -4,9 +4,8 @@ import { defineStore } from 'pinia'
 export type Theme = 'light' | 'dark'
 
 export const useThemeStore = defineStore('theme', () => {
-  // Default to dark theme
   const savedTheme = localStorage.getItem('theme') as Theme
-  const current = ref<Theme>(savedTheme || 'dark')
+  const current = ref<Theme>(savedTheme || 'light')
 
   function toggle() {
     current.value = current.value === 'light' ? 'dark' : 'light'
