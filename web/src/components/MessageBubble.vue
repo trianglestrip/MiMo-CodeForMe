@@ -4,7 +4,6 @@ import { Loading } from '@element-plus/icons-vue'
 import { renderMarkdown, highlightCodeBlocks } from '@/lib/markdown'
 import { yieldToMain } from '@/lib/asyncLocalStorage'
 import { fmtBeijingTime, fmtDuration, fmtTokenCount } from '@/lib/formatTime'
-import { phaseIconClass } from '@/lib/phaseIcons'
 import { attachmentKind, mimeBadge, resolveMessageAttachments } from '@/lib/composer/attachments'
 import AssistantActivities from '@/components/AssistantActivities.vue'
 import IncompleteNotice from '@/components/IncompleteNotice.vue'
@@ -45,8 +44,6 @@ watch(() => props.message.content, () => {
     await syncHighlight()
   })()
 })
-
-const reasoningOpen = ref<string[]>([])
 
 const userAttachments = computed(() => resolveMessageAttachments(props.message))
 
@@ -96,21 +93,6 @@ const userImageUrls = computed(() =>
         :show-cursor="showCursor"
         :completed="Boolean(message.completedAt)"
       />
-
-      <ElCollapse
-        v-if="message.reasoning"
-        v-model="reasoningOpen"
-        class="reasoning-block phase-think"
-      >
-        <ElCollapseItem name="reasoning">
-          <template #title>
-            <i :class="phaseIconClass('think')" class="reasoning-tag-icon" aria-hidden="true" />
-            <span>思考过程</span>
-            <ElText type="info" size="small" class="reasoning-len">{{ message.reasoning.length }} 字符</ElText>
-          </template>
-          <div class="reasoning-content">{{ message.reasoning }}</div>
-        </ElCollapseItem>
-      </ElCollapse>
 
       <div v-if="message.content && !bodyReady" class="bubble-sk">
         <SkeletonBlock width="88%" height="14px" />
@@ -220,38 +202,6 @@ const userImageUrls = computed(() =>
 
 .empty-reply {
   font-style: italic;
-}
-
-.reasoning-block {
-  margin-bottom: 10px;
-  border: none;
-}
-
-.reasoning-block :deep(.el-collapse-item__header) {
-  gap: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-  padding: 0 8px 0 6px;
-  border-bottom: none;
-}
-
-.reasoning-tag-icon {
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.reasoning-len {
-  margin-left: auto;
-  padding-right: 8px;
-}
-
-.reasoning-content {
-  padding: 0 12px 10px;
-  font-size: 12px;
-  white-space: pre-wrap;
-  line-height: 1.65;
-  max-height: 300px;
-  overflow-y: auto;
 }
 
 .msg-attachments {

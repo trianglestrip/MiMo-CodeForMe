@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test'
 
-const url = process.argv[2] ?? 'http://127.0.0.1:5173/'
+const url = process.argv[2] ?? 'http://127.0.0.1:7000/'
 
 const consoleLogs = []
 const pageErrors = []

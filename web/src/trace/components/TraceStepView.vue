@@ -36,7 +36,7 @@ const showPreview = computed(
     <div class="step-main">
       <div class="step-title">
         <ElTag size="small" :class="`phase-tag phase-${step.cls}`">
-          <i :class="phaseTagIconClass(step.cls)" class="tag-icon" aria-hidden="true" />
+          <i :class="phaseTagIconClass(step.cls, step.key, step.title)" class="tag-icon" aria-hidden="true" />
           {{ step.tag }}
         </ElTag>
         <span class="step-head-text">{{ step.title }}</span>

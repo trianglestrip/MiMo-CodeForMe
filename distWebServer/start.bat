@@ -1,22 +1,33 @@
 @echo off
-REM ä¸€é”®å¯åŠ¨ MiMo API + Webï¼ˆç»¿è‰²ç‰ˆï¼‰
+REM Ò»¼üÆô¶¯ MiMo API + Web£¨ÂÌÉ«°æ£©
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 set "ROOT=%CD%"
 
-where node >nul 2>&1 || (echo [ERROR] æœªæ‰¾åˆ° Node.js & pause & exit /b 1)
-if not exist "%ROOT%\server\mimo.exe" (echo [ERROR] ç¼ºå°‘ server\mimo.exeï¼Œè¯·å…ˆè¿è¡Œ web\build-dist-web-server.bat & pause & exit /b 1)
+where node >nul 2>&1 || (echo [ERROR] Î´ÕÒµ½ Node.js & pause & exit /b 1)
+if not exist "%ROOT%\server\mimo.exe" (echo [ERROR] È±ÉÙ server\mimo.exe£¬ÇëÏÈÔËĞĞ web\build-dist-web-server.bat & pause & exit /b 1)
 
-call "%~dp0stop.bat" /q
+set "MIMO_READY=0"
+curl -s http://127.0.0.1:9000/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+if not errorlevel 1 set "MIMO_READY=1"
 
-start "MiMo 4096" cmd /k call "%ROOT%\server\run-mimo.bat"
-timeout /t 2 /nobreak >nul
-start "Web 5173" cmd /k call "%ROOT%\web\start-web.bat"
+if "!MIMO_READY!"=="1" (
+  echo [INFO] MiMo 9000 ÒÑÔÚÔËĞĞ£¬Ìø¹ıÖØÆô
+  for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LISTENING"') do taskkill /F /PID %%P >nul 2>&1
+) else (
+  call "%~dp0stop.bat" /q
+  start "MiMo 9000" cmd /k call "%ROOT%\server\run-mimo.bat"
+  timeout /t 2 /nobreak >nul
+)
 
-echo [INFO] ç­‰å¾… MiMo serve ...
+start "Web 8000" cmd /k call "%ROOT%\web\start-web.bat"
+
+if "!MIMO_READY!"=="1" goto MimoReady
+
+echo [INFO] µÈ´ı MiMo serve ...
 set /a _W=0
 :WaitMimo
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s http://127.0.0.1:9000/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 goto MimoReady
 set /a _W+=1
 if !_W! GEQ 45 goto MimoFail
@@ -24,13 +35,13 @@ timeout /t 1 /nobreak >nul
 goto WaitMimo
 
 :MimoFail
-echo [WARN] MiMo serve æœªå°±ç»ªï¼Œè¯·æŸ¥çœ‹ã€ŒMiMo 4096ã€çª—å£æ˜¯å¦æœ‰æŠ¥é”™
+echo [WARN] MiMo serve Î´¾ÍĞ÷£¬Çë²é¿´¡¸MiMo 9000¡¹´°¿ÚÊÇ·ñÓĞ±¨´í
 goto Done
 
 :MimoReady
-echo [OK] MiMo serve å°±ç»ª
+echo [OK] MiMo serve ¾ÍĞ÷
 
 :Done
-echo [OK] http://127.0.0.1:5173/  Trace: /trace.html
-echo      å·¥ä½œç›®å½•è¯·åœ¨ Web é¡¶éƒ¨æ è®¾ç½®
+echo [OK] http://127.0.0.1:8000/  Trace: /trace.html
+echo      ¹¤×÷Ä¿Â¼ÇëÔÚ Web ¶¥²¿À¸ÉèÖÃ
 exit /b 0

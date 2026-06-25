@@ -1,6 +1,8 @@
 @echo off
-REM Web é™æ€æœåŠ¡(5173)ï¼Œç”± start.bat è°ƒç”¨
+REM Web ¾²Ì¬·şÎñ(8000)£¬ÓÉ start.bat µ÷ÓÃ
 cd /d "%~dp0"
-title Web 5173
+set "WEB_PORT=8000"
+set "MIMO_UPSTREAM=http://127.0.0.1:9000"
+title Web 8000
 node "%~dp0web-server.mjs"
 pause

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import FlowStrip from '@/components/FlowStrip.vue'
-import { phaseIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
+import { activityIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
 import { phaseTag } from '@/lib/partPhase'
 import type { ScrollbarInstance } from 'element-plus'
 import type { ActivityStep } from '@/stores/chat'
@@ -65,7 +65,7 @@ onMounted(scrollListToEnd)
               <i
                 class="activity-phase-icon"
                 :class="[
-                  phaseIconClass(step.phase),
+                  activityIconClass(step.phase, step.key, step.label),
                   step.status === 'error' ? 'is-error-icon' : '',
                 ]"
                 aria-hidden="true"

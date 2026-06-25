@@ -123,14 +123,14 @@ function onEditKeydown(e: KeyboardEvent, id: string) {
   align-self: flex-end;
   padding: 5px 12px;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, #f59e0b 14%, var(--bg-2));
-  border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--border));
+  background: color-mix(in srgb, var(--warn) 18%, var(--bg-2));
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
 }
 
 .queue-banner-text {
   font-size: 12px;
   font-weight: 600;
-  color: #d97706;
+  color: var(--warn);
   letter-spacing: 0.02em;
 }
 

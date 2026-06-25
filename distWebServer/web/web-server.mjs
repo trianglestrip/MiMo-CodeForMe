@@ -5,12 +5,13 @@ import { fileURLToPath } from 'node:url'
 
 // 绿色版 Web 静态服务 + /mimo 反向代理（与 index.html 同目录）
 const webDir = fileURLToPath(new URL('.', import.meta.url))
-const port = Number(process.env.WEB_PORT ?? 5173)
-const mimo = process.env.MIMO_UPSTREAM ?? 'http://127.0.0.1:4096'
+const port = Number(process.env.WEB_PORT ?? 8000)
+const mimo = process.env.MIMO_UPSTREAM ?? 'http://127.0.0.1:9000'
+const mimoPort = new URL(mimo).port || '9000'
 
 writeFileSync(
   join(webDir, 'mimo-config.js'),
-  `window.MIMO_TRACE_CONFIG={baseUrl:'/mimo',username:'mimocode',password:'mimocode-standalone'};\n`,
+  `window.MIMO_TRACE_CONFIG={baseUrl:'/mimo',username:'mimocode',password:'mimocode-standalone',apiPort:'${mimoPort}'};\n`,
 )
 
 const mime = {
@@ -26,7 +27,7 @@ const mime = {
 
 function proxy(req, res) {
   const path = req.url.replace(/^\/mimo(?=\/|$)/, '') || '/'
-  const headers = { ...req.headers, host: '127.0.0.1:4096' }
+  const headers = { ...req.headers, host: `127.0.0.1:${mimoPort}` }
   const upstream = request(`${mimo}${path}`, { method: req.method, headers }, (upstreamRes) => {
     res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers)
     upstreamRes.pipe(res)

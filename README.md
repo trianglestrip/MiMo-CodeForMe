@@ -22,20 +22,29 @@ script\start-mimo-web.bat D:\your\project
 ```
 
 启动后自动打开浏览器：
-- 聊天界面：`http://127.0.0.1:5173/`
-- Trace 面板：`http://127.0.0.1:5173/trace.html`
+- 聊天界面：`http://127.0.0.1:7000/`
+- Trace 面板：`http://127.0.0.1:7000/trace.html`
 
-### 方式二：仅 API 服务
+### 方式二：绿色版（便携）
+
+```bash
+distWebServer\start.bat
+```
+
+- Web：`http://127.0.0.1:8000/`
+- API：`http://127.0.0.1:9000/`
+
+### 方式三：仅 API 服务
 
 ```bash
 # Windows
 script\start-mimo-serve.bat
 ```
 
-服务地址：`http://127.0.0.1:4096`
+服务地址：`http://127.0.0.1:9000`
 用户名：`mimocode` | 密码：`mimocode-standalone`
 
-### 方式三：开发模式
+### 方式四：开发模式
 
 ```bash
 bun install

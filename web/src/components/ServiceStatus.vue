@@ -69,8 +69,8 @@ function chipClass(status: LinkStatus) {
 
 .status-chip-checking:hover,
 .status-chip-checking:focus {
-  border-color: color-mix(in srgb, #f59e0b 50%, var(--border));
-  background: color-mix(in srgb, #f59e0b 8%, var(--bg));
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--border));
+  background: color-mix(in srgb, var(--warn) 12%, var(--bg));
 }
 
 .status-chip-fail:hover,
@@ -85,8 +85,8 @@ function chipClass(status: LinkStatus) {
 }
 
 .status-chip-checking {
-  border-color: color-mix(in srgb, #f59e0b 32%, var(--border));
-  background: color-mix(in srgb, #f59e0b 5%, var(--bg));
+  border-color: color-mix(in srgb, var(--warn) 38%, var(--border));
+  background: color-mix(in srgb, var(--warn) 10%, var(--bg));
 }
 
 .status-chip-fail {
@@ -155,8 +155,8 @@ function chipClass(status: LinkStatus) {
 }
 
 .status-dot.status-dot-checking {
-  background: #f59e0b;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 40%, transparent);
+  background: var(--warn);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 45%, transparent);
   animation: status-dot-pulse 0.9s ease-in-out infinite;
 }
 
@@ -193,7 +193,7 @@ function chipClass(status: LinkStatus) {
 }
 
 .status-chip-checking .status-label {
-  color: #d97706;
+  color: var(--warn);
 }
 
 @keyframes status-dot-breathe {
@@ -233,11 +233,11 @@ function chipClass(status: LinkStatus) {
 
 @keyframes status-ring-checking {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, #f59e0b 65%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 70%, transparent);
     opacity: 0.9;
   }
   100% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, #f59e0b 0%, transparent);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--warn) 0%, transparent);
     opacity: 0;
   }
 }
@@ -264,7 +264,7 @@ function chipClass(status: LinkStatus) {
   }
 
   .status-dot.status-dot-checking {
-    box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 35%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 40%, transparent);
   }
 
   .status-dot.status-dot-fail {

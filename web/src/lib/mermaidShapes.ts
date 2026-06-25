@@ -21,22 +21,39 @@ export function mermaidShapeClass(shape: MermaidFlowShape): string {
 }
 
 export function isCompactMermaidShape(shape: MermaidFlowShape): boolean {
-  return shape === 'stadium' || shape === 'rhombus' || shape === 'circle' || shape === 'hexagon'
+  return shape === 'stadium' || shape === 'rhombus'
 }
 
-/** 按阶段与 part key 映射 Mermaid 外形 */
+function isStepStart(key?: string, label?: string) {
+  return key?.startsWith('step-start:') || label?.includes('开始') === true
+}
+
+function isStepFinish(key?: string, label?: string) {
+  return key?.startsWith('step-finish:') || label?.includes('轮次完成') === true
+}
+
+/** 工具调用：统一子流程外形 */
+function toolMermaidShape(_label?: string): MermaidFlowShape {
+  return 'subroutine'
+}
+
+/** 按阶段与 part key 映射 Mermaid 外形（尽量每种消息不同形） */
 export function flowMermaidShape(
   phase: ActivityPhase,
   key?: string,
   label?: string,
 ): MermaidFlowShape {
-  if (phase === 'step') return 'stadium'
+  if (phase === 'step') {
+    if (isStepStart(key, label)) return 'stadium'
+    if (isStepFinish(key, label)) return 'stadium'
+    return 'rounded'
+  }
   if (phase === 'think') return 'rounded'
-  if (phase === 'tool') return 'rect'
+  if (phase === 'tool') return toolMermaidShape(label)
   if (phase === 'output') return 'parallelogram'
   if (phase === 'file') {
     if (key?.startsWith('snapshot:')) return 'cylinder'
-    if (key?.startsWith('patch:')) return 'trapezoid-alt'
+    if (key?.startsWith('patch:')) return 'rounded'
     if (key?.startsWith('file:')) return 'asymmetric'
     return 'trapezoid'
   }
@@ -46,8 +63,8 @@ export function flowMermaidShape(
   }
   if (phase === 'system') {
     if (key?.startsWith('retry:') || label?.includes('重试')) return 'rhombus'
-    if (key?.startsWith('compaction:')) return 'hexagon'
-    if (key?.startsWith('checkpoint:')) return 'circle'
+    if (key?.startsWith('compaction:')) return 'trapezoid-alt'
+    if (key?.startsWith('checkpoint:')) return 'rounded'
     return 'rounded'
   }
   return 'rect'
@@ -68,3 +85,21 @@ export const MERMAID_SHAPE_LABELS: Record<MermaidFlowShape, string> = {
   trapezoid: '梯形',
   'trapezoid-alt': '梯形(反)',
 }
+
+export const MERMAID_SHAPE_SYNTAX: Record<MermaidFlowShape, string> = {
+  rect: '[text]',
+  rounded: '(text)',
+  stadium: '([text])',
+  subroutine: '[[text]]',
+  cylinder: '[(text)]',
+  circle: '((text))',
+  asymmetric: '>text]',
+  rhombus: '{text}',
+  hexagon: '{{text}}',
+  parallelogram: '[/text/]',
+  'parallelogram-alt': '[\\text\\]',
+  trapezoid: '[/text\\]',
+  'trapezoid-alt': '[\\\\text//]',
+}
+
+export const ALL_MERMAID_SHAPES = Object.keys(MERMAID_SHAPE_LABELS) as MermaidFlowShape[]

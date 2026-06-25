@@ -16,9 +16,20 @@ function frontendPort(): string {
   return window.location.port || (window.location.protocol === 'https:' ? '443' : '80')
 }
 
+function mimoApiPort(): string {
+  const cfg = mimoConfig()
+  if (cfg.apiPort) return cfg.apiPort
+  if (!cfg.baseUrl.startsWith('/')) return new URL(cfg.baseUrl).port || '9000'
+  if (import.meta.env.DEV) {
+    const url = import.meta.env.VITE_MIMO_SERVER_URL ?? 'http://127.0.0.1:9000'
+    return new URL(url).port || '9000'
+  }
+  return '9000'
+}
+
 async function checkMimo(): Promise<{ ok: boolean; port: string; detail?: string }> {
   const cfg = mimoConfig()
-  const port = cfg.baseUrl.startsWith('/') ? '4096' : new URL(cfg.baseUrl).port || '4096'
+  const port = mimoApiPort()
   try {
     const res = await fetch(apiUrl('/global/health'), {
       cache: 'no-store',
@@ -29,8 +40,8 @@ async function checkMimo(): Promise<{ ok: boolean; port: string; detail?: string
   } catch (e) {
     const hint =
       window.location.hostname === 'localhost' || window.location.hostname === '[::1]'
-        ? '请改用 http://127.0.0.1:5173 打开（默认 IPv4）'
-        : `无法连接 ${cfg.baseUrl}，请运行 script\\start-mimo-web.bat 启动 mimo serve`
+        ? `请改用 http://127.0.0.1:${import.meta.env.DEV ? '7000' : '8000'} 打开（默认 IPv4）`
+        : `无法连接 ${cfg.baseUrl}，请运行 distWebServer\\start.bat 或 script\\start-mimo-web.bat`
     const msg = e instanceof Error ? e.message : String(e)
     return { ok: false, port, detail: `${hint} · ${msg}` }
   }
@@ -39,7 +50,7 @@ async function checkMimo(): Promise<{ ok: boolean; port: string; detail?: string
 export function useServiceStatus() {
   const api = ref<PortStatus>({
     label: 'API',
-    port: '4096',
+    port: mimoApiPort(),
     status: 'checking',
     detail: '检测中…',
   })
@@ -66,7 +77,7 @@ export function useServiceStatus() {
     api.value.status = mimo.ok ? 'ok' : 'fail'
     api.value.detail = mimo.ok
       ? `后端就绪 · ${mimo.port}`
-      : mimo.detail ?? `后端未连接 · 请确认 API 窗口（4096）已启动 · ${mimo.port}`
+      : mimo.detail ?? `后端未连接 · 请确认 API 窗口（${mimo.port}）已启动 · ${mimo.port}`
 
     fe.value.status = 'ok'
     fe.value.detail = `前端正常 · ${fe.value.port}`

@@ -22,7 +22,7 @@ export async function waitForMimoReady(timeoutMs = 15_000): Promise<void> {
     await new Promise((r) => setTimeout(r, 400))
   }
   throw new Error(
-    `MiMo serve 未就绪（${cfg.baseUrl}）。请确认：1) 已运行 start.bat 或 start-mimo-web.bat；2) 「MiMo 4096」窗口无报错；3) 使用 http://127.0.0.1:5173 打开页面`,
+    `MiMo serve 未就绪（${cfg.baseUrl}）。请确认：1) 已运行 distWebServer\\start.bat（8000/9000）或 script\\start-mimo-web.bat（7000/9000）；2) MiMo API 窗口无报错；3) 使用正确地址打开页面`,
   )
 }
 

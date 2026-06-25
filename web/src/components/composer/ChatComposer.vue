@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Paperclip, Plus, Promotion, VideoPause, Delete } from '@element-plus/icons-vue'
+import { Paperclip, Plus, VideoPause, Delete } from '@element-plus/icons-vue'
 import { TURN_ENGINE_KEY } from '@/composables/turn/useTurnEngine'
 import { useComposerActions } from '@/composables/useComposerActions'
 import {
@@ -183,12 +183,13 @@ function onDragLeave() {
         <ElButton
           v-else
           type="primary"
-          :icon="Promotion"
           class="side-btn action-btn"
           :disabled="!canAction"
           :title="isRunning ? '排队发送（Enter）' : '发送（Enter）'"
           @click="onActionClick"
-        />
+        >
+          <i class="fa-solid fa-arrow-turn-down send-icon" aria-hidden="true" />
+        </ElButton>
       </div>
     </div>
   </div>
@@ -362,5 +363,10 @@ function onDragLeave() {
 
 .action-btn {
   font-size: 18px;
+}
+
+.send-icon {
+  font-size: 17px;
+  line-height: 1;
 }
 </style>

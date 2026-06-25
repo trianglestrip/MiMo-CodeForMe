@@ -9,6 +9,7 @@ declare global {
       username?: string
       password?: string
       workDir?: string
+      apiPort?: string
     }
   }
 }
@@ -19,9 +20,10 @@ export function mimoConfig() {
     trace?.baseUrl?.trim() ||
     (import.meta.env.DEV
       ? '/mimo'
-      : (import.meta.env.VITE_MIMO_SERVER_URL ?? 'http://127.0.0.1:4096').replace(/\/$/, ''))
+      : (import.meta.env.VITE_MIMO_SERVER_URL ?? 'http://127.0.0.1:9000').replace(/\/$/, ''))
   return {
     baseUrl,
+    apiPort: trace?.apiPort,
     username: trace?.username ?? import.meta.env.VITE_MIMO_SERVER_USER ?? 'mimocode',
     password: trace?.password ?? import.meta.env.VITE_MIMO_SERVER_PASSWORD ?? 'mimocode-standalone',
     workDir: getWorkDir(),

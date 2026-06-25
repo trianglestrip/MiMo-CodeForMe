@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const cfg = {
-  baseUrl: 'http://127.0.0.1:4096',
+  baseUrl: 'http://127.0.0.1:9000',
   username: 'mimocode',
   password: 'mimocode-standalone',
   workDir: 'd:/gitProject/testCAD/portable/MiMo-CodeForMe',

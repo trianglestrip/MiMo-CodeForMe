@@ -1,4 +1,4 @@
 @echo off
-title Web 5173
+title Web Dev
 cd /d "%~dp0..\web"
 npm run dev

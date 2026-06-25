@@ -1,5 +1,5 @@
 const cfg = {
-  baseUrl: 'http://127.0.0.1:4096',
+  baseUrl: 'http://127.0.0.1:9000',
   user: 'mimocode',
   pass: 'mimocode-standalone',
   dir: 'd:/gitProject/testCAD/portable/MiMo-CodeForMe',

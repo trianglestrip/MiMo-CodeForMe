@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { activityFlowLabel } from '@/lib/flowLabels'
 import { flowNodeClass } from '@/lib/partPhase'
-import { flowMermaidShape, mermaidShapeClass, isCompactMermaidShape } from '@/lib/mermaidShapes'
-import { flowCompactLines } from '@/lib/flowCompactLabels'
-import { phaseIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
+import { mermaidShapeClass } from '@/lib/mermaidShapes'
+import { buildFlowSegments, visibleFlowSteps } from '@/lib/flowSegments'
+import { activityIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
+import type { FlowStepView } from '@/lib/flowSegments'
 import type { ActivityStep } from '@/stores/chat'
 
 const props = defineProps<{
@@ -14,82 +14,109 @@ const props = defineProps<{
   embedded?: boolean
 }>()
 
-const flowSteps = computed(() =>
-  props.activities
-    .filter((a) => !(a.key === 'wait' && a.status === 'done'))
-    .filter(
-      (a) =>
-        a.status === 'done' ||
-        a.status === 'error' ||
-        (props.active && a.status === 'running'),
-    )
-    .map((a) => {
-      const mermaidShape = flowMermaidShape(a.phase, a.key, a.label)
-      return {
-        key: a.key,
-        cls: a.phase,
-        label: activityFlowLabel(a.phase, a.label, a.status),
-        status: a.status,
-        subOk: a.phase === 'tool' ? a.status !== 'error' : undefined,
-        mermaidShape,
-        compactLines: isCompactMermaidShape(mermaidShape)
-          ? flowCompactLines(mermaidShape, a.key, a.label)
-          : null,
-        shapeDashed: a.phase === 'system' && mermaidShape === 'rounded',
-      }
-    }),
+const flowSteps = computed(() => visibleFlowSteps(props.activities, props.active))
+const flowSegments = computed(() => buildFlowSegments(flowSteps.value))
+
+const lastFlowKey = computed(() =>
+  flowSteps.value.length ? flowSteps.value[flowSteps.value.length - 1].key : null,
 )
 
 const endCompactLines: [string, string] = ['流程', '完成']
+
+function isNodeNew(step: FlowStepView) {
+  return (
+    props.active &&
+    step.status === 'running' &&
+    step.key === lastFlowKey.value
+  )
+}
 </script>
 
 <template>
   <div class="flow-strip" :class="{ active, done, embedded }">
     <div class="section-label flow-label">调用流程</div>
     <div class="flow-strip-track">
-      <template v-if="flowSteps.length">
-        <div
-          v-for="(step, index) in flowSteps"
-          :key="step.key"
-          class="flow-step-group"
-        >
-          <span v-if="index > 0" class="flow-arrow" aria-hidden="true">→</span>
-          <div
-            class="flow-node"
-            :class="[
-              flowNodeClass(step.cls, step.subOk),
-              mermaidShapeClass(step.mermaidShape),
-              {
-                'shape-dashed': step.shapeDashed,
-                'node-new': index === flowSteps.length - 1 && active && step.status === 'running',
-                'node-running': step.status === 'running',
-              },
-            ]"
-            :title="step.label"
-          >
-            <span v-if="step.compactLines" class="flow-node-compact">
-              <span class="compact-line">{{ step.compactLines[0] }}</span>
-              <span class="compact-line">{{ step.compactLines[1] }}</span>
-            </span>
-            <span v-else class="flow-node-inner">
-              <span class="flow-node-text">
-                <i class="flow-icon" :class="phaseIconClass(step.cls)" aria-hidden="true" />
-                {{ step.label }}
-                <i
-                  v-if="step.cls === 'tool' && toolStatusIconClass(step.status)"
-                  class="flow-status-icon"
-                  :class="toolStatusIconClass(step.status)!"
-                  aria-hidden="true"
-                />
-              </span>
-            </span>
+      <template v-if="flowSegments.length">
+        <template v-for="(segment, segIdx) in flowSegments" :key="segment.kind === 'round' ? `round-${segment.round}` : segment.step.key">
+          <span v-if="segIdx > 0" class="flow-arrow" aria-hidden="true">→</span>
+
+          <div v-if="segment.kind === 'round'" class="flow-round-box">
+            <span class="flow-round-tag">推理 {{ segment.round }}</span>
+            <div class="flow-round-body">
+              <template v-for="(step, stepIdx) in segment.steps" :key="step.key">
+                <span v-if="stepIdx > 0" class="flow-arrow" aria-hidden="true">→</span>
+                <div
+                  class="flow-node"
+                  :class="[
+                    flowNodeClass(step.cls, step.subOk),
+                    mermaidShapeClass(step.mermaidShape),
+                    {
+                      'shape-dashed': step.shapeDashed,
+                      'node-new': isNodeNew(step),
+                      'node-running': step.status === 'running',
+                    },
+                  ]"
+                  :title="step.label"
+                >
+                  <span v-if="step.compactLines" class="flow-node-compact">
+                    <span class="compact-line">{{ step.compactLines[0] }}</span>
+                    <span class="compact-line">{{ step.compactLines[1] }}</span>
+                  </span>
+                  <span v-else class="flow-node-inner">
+                    <span class="flow-node-text">
+                      <i class="flow-icon" :class="activityIconClass(step.cls, step.key, step.label)" aria-hidden="true" />
+                      {{ step.label }}
+                      <i
+                        v-if="step.cls === 'tool' && toolStatusIconClass(step.status)"
+                        class="flow-status-icon"
+                        :class="toolStatusIconClass(step.status)!"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </span>
+                </div>
+              </template>
+            </div>
           </div>
-        </div>
+
+          <div v-else class="flow-step-group">
+            <div
+              class="flow-node"
+              :class="[
+                flowNodeClass(segment.step.cls, segment.step.subOk),
+                mermaidShapeClass(segment.step.mermaidShape),
+                {
+                  'shape-dashed': segment.step.shapeDashed,
+                  'node-new': isNodeNew(segment.step),
+                  'node-running': segment.step.status === 'running',
+                },
+              ]"
+              :title="segment.step.label"
+            >
+              <span v-if="segment.step.compactLines" class="flow-node-compact">
+                <span class="compact-line">{{ segment.step.compactLines[0] }}</span>
+                <span class="compact-line">{{ segment.step.compactLines[1] }}</span>
+              </span>
+              <span v-else class="flow-node-inner">
+                <span class="flow-node-text">
+                  <i class="flow-icon" :class="activityIconClass(segment.step.cls, segment.step.key, segment.step.label)" aria-hidden="true" />
+                  {{ segment.step.label }}
+                  <i
+                    v-if="segment.step.cls === 'tool' && toolStatusIconClass(segment.step.status)"
+                    class="flow-status-icon"
+                    :class="toolStatusIconClass(segment.step.status)!"
+                    aria-hidden="true"
+                  />
+                </span>
+              </span>
+            </div>
+          </div>
+        </template>
       </template>
       <span v-else-if="active" class="flow-wait">等待执行…</span>
       <div v-if="done" class="flow-step-group">
-        <span v-if="flowSteps.length" class="flow-arrow" aria-hidden="true">→</span>
-        <div class="flow-node node-end shape-stadium">
+        <span v-if="flowSegments.length" class="flow-arrow" aria-hidden="true">→</span>
+        <div class="flow-node node-step shape-stadium">
           <span class="flow-node-compact">
             <span class="compact-line">{{ endCompactLines[0] }}</span>
             <span class="compact-line">{{ endCompactLines[1] }}</span>
@@ -166,7 +193,6 @@ const endCompactLines: [string, string] = ['流程', '完成']
   min-height: 28px;
   padding: 6px 10px;
   border: 1.5px solid var(--border);
-  background: var(--bg);
   color: var(--text);
   overflow: hidden;
   animation: flow-node-in 0.35s ease-out both;
@@ -176,7 +202,7 @@ const endCompactLines: [string, string] = ['流程', '完成']
 }
 
 .flow-node.node-running {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--phase-fg, var(--accent)) 28%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--phase-fg, var(--accent)) 45%, transparent);
 }
 
 .flow-node-inner {
@@ -264,10 +290,10 @@ const endCompactLines: [string, string] = ['流程', '完成']
 @keyframes flow-node-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--phase-think) 0%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--phase-fg, var(--accent)) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--phase-think) 35%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--phase-fg, var(--accent)) 50%, transparent);
   }
 }
 </style>
