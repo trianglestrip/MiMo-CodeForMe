@@ -1,3 +1,5 @@
+import { getWorkDir } from '@/lib/workDir'
+
 declare const __DEFAULT_MIMO_WORK_DIR__: string
 
 declare global {
@@ -13,10 +15,6 @@ declare global {
 
 export function mimoConfig() {
   const trace = typeof window !== 'undefined' ? window.MIMO_TRACE_CONFIG : undefined
-  const raw = import.meta.env.VITE_MIMO_WORK_DIR?.trim()
-  const workDir =
-    trace?.workDir?.trim() ||
-    (raw && raw !== '..' ? raw : __DEFAULT_MIMO_WORK_DIR__)
   const baseUrl =
     trace?.baseUrl?.trim() ||
     (import.meta.env.DEV
@@ -26,7 +24,7 @@ export function mimoConfig() {
     baseUrl,
     username: trace?.username ?? import.meta.env.VITE_MIMO_SERVER_USER ?? 'mimocode',
     password: trace?.password ?? import.meta.env.VITE_MIMO_SERVER_PASSWORD ?? 'mimocode-standalone',
-    workDir: workDir.replace(/\\/g, '/'),
+    workDir: getWorkDir(),
   }
 }
 

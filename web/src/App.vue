@@ -16,10 +16,10 @@ const user = useUserStore()
 const chat = useChatStore()
 
 onMounted(async () => {
+  settings.initWorkDir()
   startMimoTraceBackground()
   await Promise.all([
     settings.fetchModels(),
-    settings.fetchWorkspace(),
     user.init(),
     chat.init(),
   ])

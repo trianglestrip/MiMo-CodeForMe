@@ -14,8 +14,8 @@ const user = useUserStore()
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo">
-        <img class="logo-icon" src="/favicon.svg" alt="MiMoCode" />
-        <span class="logo-text">MiMoCode</span>
+        <img class="logo-icon" src="/favicon.svg" alt="BcAI" />
+        <span class="logo-text">BcAI</span>
       </div>
       <button class="new-btn" @click="chat.newConversation()" title="新对话">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

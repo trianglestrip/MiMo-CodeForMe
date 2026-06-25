@@ -26,6 +26,9 @@ export interface ChatMessage {
   reasoning?: string
   activities?: ActivityStep[]
   createdAt: number
+  completedAt?: number
+  durationMs?: number
+  usage?: { total: number; input: number; output: number }
   model?: string
   toolCalls?: ToolCallPayload[]
 }
@@ -163,6 +166,18 @@ export const useChatStore = defineStore('chat', () => {
     saveLocalConversations(conversations.value)
   }
 
+  function completeLastAssistant(meta?: { usage?: ChatMessage['usage'] }) {
+    const last = lastAssistant()
+    if (!last) return
+    const now = Date.now()
+    last.completedAt = now
+    last.durationMs = now - last.createdAt
+    if (meta?.usage) last.usage = meta.usage
+    const conv = activeConversation()
+    if (conv) conv.updatedAt = now
+    saveLocalConversations(conversations.value)
+  }
+
   function setLastAssistantContent(text: string) {
     const conv = activeConversation()
     if (!conv) return
@@ -225,6 +240,7 @@ export const useChatStore = defineStore('chat', () => {
     appendToLastAssistant,
     pushAssistantActivity,
     finishAssistantActivities,
+    completeLastAssistant,
     setLastAssistantContent,
     persist,
     removeLastAssistantIfEmpty,

@@ -18,7 +18,7 @@ function withDir(p) {
   return u.toString()
 }
 
-let html = fs.readFileSync(path.join(__dirname, '../public/trace.html'), 'utf8')
+let html = fs.readFileSync(path.join(__dirname, '../trace.html'), 'utf8')
 html = html.replace('<script src="/mimo-config.js"></script>', `<script>window.MIMO_TRACE_CONFIG=${JSON.stringify(cfg)}</script>`)
 html = html.replace(
   /if \(new URLSearchParams\(location\.search\)\.get\('simulate'\) === '1'\) \{[\s\S]*?\} else \{[\s\S]*?\}\s*<\/script>/,

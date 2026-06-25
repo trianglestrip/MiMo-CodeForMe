@@ -5,19 +5,18 @@ import { resolve } from 'path'
 
 const repoRoot = resolve(__dirname, '..').replace(/\\/g, '/')
 
-function mimoTraceConfigJs(workDir: string, devProxy: boolean) {
+function mimoTraceConfigJs(devProxy: boolean) {
   const baseUrl = devProxy ? '/mimo' : 'http://127.0.0.1:4096'
   return `window.MIMO_TRACE_CONFIG = {
   baseUrl: '${baseUrl}',
   username: 'mimocode',
   password: 'mimocode-standalone',
-  workDir: ${JSON.stringify(workDir)},
 }
 `
 }
 
-function writeTraceConfig(workDir: string, devProxy: boolean) {
-  fs.writeFileSync(resolve(__dirname, 'public/mimo-config.js'), mimoTraceConfigJs(workDir, devProxy))
+function writeTraceConfig(devProxy: boolean) {
+  fs.writeFileSync(resolve(__dirname, 'public/mimo-config.js'), mimoTraceConfigJs(devProxy))
 }
 
 export default defineConfig({
@@ -28,15 +27,23 @@ export default defineConfig({
       config(_, env) {
         const workDir = process.env.VITE_MIMO_WORK_DIR?.trim() || repoRoot
         const devProxy = env.command === 'serve'
-        writeTraceConfig(workDir, devProxy)
+        writeTraceConfig(devProxy)
         return {
           define: {
-            __DEFAULT_MIMO_WORK_DIR__: JSON.stringify(workDir),
+            __DEFAULT_MIMO_WORK_DIR__: JSON.stringify(devProxy ? workDir : ''),
           },
         }
       },
     },
   ],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        trace: resolve(__dirname, 'trace.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

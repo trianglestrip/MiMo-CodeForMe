@@ -7,10 +7,11 @@ import {
   userMessageCount,
   waitForMimoReady,
 } from '@/lib/mimo/client'
-import { mimoConfig } from '@/lib/mimo/config'
+import { getWorkDir, WORK_DIR_CHANGED } from '@/lib/workDir'
 import { inlineSnippet, thinkActivityLabel, toolActivityLabel } from '@/lib/mimo/toolLabel'
 import { subscribeMimoEvents } from '@/lib/mimo/eventStream'
 import { mapMimoEvent, type TraceEvent } from '@/lib/mimo/traceMapper'
+import { usageFromMessageInfo } from '@/lib/mimo/tokens'
 import { useChatStore } from '@/stores/chat'
 
 const traceEvents = ref<TraceEvent[]>([])
@@ -24,8 +25,8 @@ const activeSessionFilter = ref<string | null>(null)
 const assistantTextParts = new Set<string>()
 
 function workDir(): string {
-  const dir = mimoConfig().workDir.trim()
-  if (!dir) throw new Error('VITE_MIMO_WORK_DIR 未配置')
+  const dir = getWorkDir().trim()
+  if (!dir) throw new Error('请先在顶部设置工作目录')
   return dir
 }
 
@@ -72,6 +73,10 @@ async function ensureEventStream() {
             const mapped = mapMimoEvent(raw)
             const sessionID = eventSessionID(raw)
             pushTrace(mapped)
+            if (raw.type === 'message.updated') {
+              handleMessageUpdated(raw, sessionID)
+              return
+            }
             handleChatPart(raw, sessionID)
           },
           streamAbort!.signal,
@@ -101,7 +106,30 @@ function lastAssistantMessage() {
   return [...conv.messages].reverse().find((m) => m.role === 'assistant') ?? null
 }
 
+function applyAssistantUsage(info: Record<string, unknown>) {
+  const usage = usageFromMessageInfo(info)
+  if (!usage) return
+  const last = lastAssistantMessage()
+  if (!last) return
+  last.usage = usage
+  useChatStore().persist()
+}
+
+function handleMessageUpdated(raw: { type?: string; properties?: Record<string, unknown> }, sessionID?: string) {
+  const chat = useChatStore()
+  const conv = chat.activeConversation()
+  if (!conv) return
+  if (sessionID && sessionByConversation.get(conv.id) !== sessionID) return
+  const info = raw.properties?.info as Record<string, unknown> | undefined
+  if (!info || info.role !== 'assistant') return
+  applyAssistantUsage(info)
+}
+
 function handleChatPart(raw: { type?: string; properties?: Record<string, unknown> }, sessionID?: string) {
+  if (raw.type === 'message.updated') {
+    handleMessageUpdated(raw, sessionID)
+    return
+  }
   const chat = useChatStore()
   const conv = chat.activeConversation()
   if (!conv) return
@@ -200,8 +228,16 @@ const SESSION_MAP_KEY = 'mimo-web-session-map'
 function persistSessionLink(conversationId: string, sessionId: string, title: string) {
   try {
     const raw = localStorage.getItem(SESSION_MAP_KEY)
-    const map = raw ? (JSON.parse(raw) as Record<string, { sessionId: string; title: string; updatedAt: number }>) : {}
-    map[conversationId] = { sessionId, title, updatedAt: Date.now() }
+    const map = raw
+      ? (JSON.parse(raw) as Record<string, { sessionId: string; title: string; updatedAt: number; createdAt?: number }>)
+      : {}
+    const prev = map[conversationId]
+    map[conversationId] = {
+      sessionId,
+      title,
+      updatedAt: Date.now(),
+      createdAt: prev?.createdAt ?? Date.now(),
+    }
     localStorage.setItem(SESSION_MAP_KEY, JSON.stringify(map))
   } catch {
     // ignore
@@ -247,10 +283,19 @@ export async function sendViaMimo(userContent: string): Promise<void> {
     const usersBefore = userMessageCount(before)
     await promptAsync(sessionID, userContent, directory)
     const text = await pollAssistantReply(sessionID, directory, usersBefore)
+    const after = await fetchSessionMessages(sessionID, directory)
+    let usage = null as ReturnType<typeof usageFromMessageInfo>
+    for (let i = after.length - 1; i >= 0; i--) {
+      const msg = after[i]
+      if (msg.info?.role !== 'assistant') continue
+      usage = usageFromMessageInfo(msg.info as Record<string, unknown>)
+      if (usage) break
+    }
     if (text) chat.setLastAssistantContent(text)
     if (!lastAssistantContent()) {
       throw new Error('未收到 MiMo 回复，请新建对话后重试')
     }
+    chat.completeLastAssistant(usage ? { usage } : undefined)
     persistSessionLink(conv.id, sessionID, conv.title)
   } catch (e) {
     sessionByConversation.delete(conv.id)
@@ -272,8 +317,12 @@ export async function checkMimoStatus(): Promise<boolean> {
 }
 
 export function startMimoTraceBackground() {
-  if (mimoConfig().workDir) {
-    void ensureEventStream()
-    void checkMimoStatus()
+  void ensureEventStream()
+  void checkMimoStatus()
+  if (typeof window !== 'undefined') {
+    window.addEventListener(WORK_DIR_CHANGED, () => {
+      streamDirectory = null
+      void ensureEventStream()
+    })
   }
 }

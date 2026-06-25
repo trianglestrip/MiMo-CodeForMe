@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { mimoConfig } from '@/lib/mimo/config'
+import { getWorkDir, setWorkDir as persistWorkDir, WORK_DIR_CHANGED } from '@/lib/workDir'
 
 export interface SlashCommand {
   name: string
@@ -59,7 +59,7 @@ export const useSettingsStore = defineStore('settings', () => {
   ])
   const modelsLoaded = ref(true)
   const settingsOpen = ref(false)
-  const workspacePath = ref('')
+  const workDir = ref(getWorkDir())
 
   const currentModel = computed(() => models.value.find(m => m.id === model.value))
   const slashCommands = computed(() => currentModel.value?.slashCommands ?? [])
@@ -69,8 +69,29 @@ export const useSettingsStore = defineStore('settings', () => {
     provider.value = m.provider
   }
 
+  function initWorkDir() {
+    workDir.value = getWorkDir()
+    if (typeof window !== 'undefined') {
+      window.addEventListener(WORK_DIR_CHANGED, onWorkDirChanged)
+      window.addEventListener('storage', onStorage)
+    }
+  }
+
+  function onWorkDirChanged() {
+    workDir.value = getWorkDir()
+  }
+
+  function onStorage(e: StorageEvent) {
+    if (e.key === 'bcai-work-dir') workDir.value = getWorkDir()
+  }
+
+  function setWorkDir(path: string) {
+    persistWorkDir(path)
+    workDir.value = getWorkDir()
+  }
+
   async function fetchWorkspace() {
-    workspacePath.value = mimoConfig().workDir
+    workDir.value = getWorkDir()
   }
 
   async function fetchModels() {
@@ -85,9 +106,11 @@ export const useSettingsStore = defineStore('settings', () => {
     currentModel,
     modelsLoaded,
     settingsOpen,
-    workspacePath,
+    workDir,
     fetchModels,
     fetchWorkspace,
+    initWorkDir,
+    setWorkDir,
     selectModel,
   }
 })

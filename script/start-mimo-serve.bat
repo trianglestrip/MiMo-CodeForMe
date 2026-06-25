@@ -36,10 +36,10 @@ if errorlevel 1 (
 echo.
 echo  MiMoCode Serve
 echo    API:      http://%HOST%:%PORT%
-echo    Work dir: %WORK_DIR%
 echo    User:     %MIMOCODE_SERVER_USERNAME%
 echo    Password: %MIMOCODE_SERVER_PASSWORD%
 echo    Model:    mimo/mimo-auto
+echo    工作目录: 请在 Web 顶部栏设置
 echo.
 
 cd /d "%WORK_DIR%"

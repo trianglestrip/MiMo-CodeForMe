@@ -1,0 +1,324 @@
+/* Trace 页布局与流程样式（颜色沿用 app.css 主题变量） */
+html,
+body,
+#trace-app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.trace-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .trace-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  background: var(--bg-2);
+  overflow-y: auto;
+}
+
+.hint {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.7;
+}
+
+.hint code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-3);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.conv-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.conv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conv-item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.conv-item:hover {
+  border-color: var(--accent);
+}
+
+.conv-item.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.conv-item .q {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-item .meta {
+  color: var(--text-3);
+  font-size: 10px;
+  margin-top: 4px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.timeline {
+  padding: 20px 24px 48px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.empty {
+  color: var(--text-3);
+  text-align: center;
+  padding: 48px;
+}
+
+.session-block {
+  margin-bottom: 0;
+}
+
+.session-head {
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.session-head .sid {
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.turn {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.turn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.turn-head {
+  padding: 12px 16px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.turn-q {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.turn-q::before {
+  content: '问：';
+  color: var(--free-color);
+  font-weight: 600;
+}
+
+.turn-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.turn-body {
+  padding: 8px 0;
+}
+
+.turn-foot {
+  padding: 8px 16px 12px;
+  font-size: 12px;
+  color: var(--free-color);
+  border-top: 1px solid var(--border);
+  display: none;
+}
+
+.turn.done .turn-foot {
+  display: block;
+}
+
+.flow-step {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.flow-step:last-child {
+  border-bottom: none;
+}
+
+.step-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.step-think .step-num {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+
+.step-tool .step-num {
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #f59e0b;
+}
+
+.step-output .step-num {
+  background: color-mix(in srgb, var(--free-color) 20%, transparent);
+  color: var(--free-color);
+}
+
+.step-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.step-title .tag {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.step-think .tag {
+  color: var(--accent);
+}
+
+.step-tool .tag {
+  color: #f59e0b;
+}
+
+.step-output .tag {
+  color: var(--free-color);
+}
+
+.step-intent {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+.step-input {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--bg-3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.step-preview {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-2);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.step-preview.live {
+  color: var(--text);
+}
+
+.step-preview.live::after {
+  content: '▌';
+  animation: trace-blink 1s step-end infinite;
+  color: var(--accent);
+}
+
+.step-preview.hidden {
+  display: none;
+}
+
+.step-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.step-sub.ok {
+  color: var(--free-color);
+}
+
+.step-sub.err {
+  color: var(--error);
+}
+
+@keyframes trace-blink {
+  50% {
+    opacity: 0;
+  }
+}

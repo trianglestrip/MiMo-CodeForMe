@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { mimoConfig } from '@/lib/mimo/config'
 
 const settings = useSettingsStore()
-
-onMounted(async () => {
-  await settings.fetchWorkspace()
-})
 
 function close() {
   settings.settingsOpen = false
@@ -34,14 +29,8 @@ function close() {
         </section>
 
         <section class="section">
-          <label class="label">工作目录</label>
-          <p class="desc">Agent 在此目录内读写文件、执行命令。</p>
-          <p class="hint-text">{{ settings.workspacePath || '（未配置 VITE_MIMO_WORK_DIR）' }}</p>
-        </section>
-
-        <section class="section">
           <label class="label">关于</label>
-          <p class="desc">MiMoCode 轻量 Web：Vue 聊天 + 调用流程 Trace。</p>
+          <p class="desc">BcAI 轻量 Web：Vue 聊天 + 调用流程 Trace。工作目录请在顶部栏设置。</p>
         </section>
       </div>
     </div>

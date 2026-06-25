@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { renderMarkdown, highlightCodeBlocks } from '@/lib/markdown'
+import { fmtBeijingTime, fmtDuration, fmtTokenCount } from '@/lib/formatTime'
+import AssistantActivities from '@/components/AssistantActivities.vue'
 import type { ChatMessage } from '@/stores/chat'
 
 const props = defineProps<{
@@ -29,22 +31,13 @@ const reasoningOpen = ref(false)
 const showInlineReasoning = computed(
   () => !(props.message.activities ?? []).some((s) => s.phase === 'think'),
 )
-
-const pulseStepId = computed(() => {
-  if (!props.showCursor) return null
-  const steps = props.message.activities ?? []
-  if (!steps.length) return null
-  for (let i = steps.length - 1; i >= 0; i--) {
-    if (steps[i].status === 'running') return steps[i].id
-  }
-  return steps[steps.length - 1].id
-})
 </script>
 
 <template>
-  <div class="message-row" :class="message.role">
+  <div class="message-row" :class="message.role" :data-qnav="message.role === 'user' ? message.id : undefined">
     <!-- User message -->
     <div v-if="message.role === 'user'" class="bubble user-bubble">
+      <div class="msg-time">{{ fmtBeijingTime(message.createdAt) }}</div>
       <!-- Attached images -->
       <div v-if="message.images?.length" class="msg-images">
         <img
@@ -67,28 +60,12 @@ const pulseStepId = computed(() => {
         <span class="model-tag">{{ message.model }}</span>
       </div>
 
-      <!-- Process steps: think / tool / output -->
-      <div v-if="message.activities?.length" class="activity-list">
-        <div
-          v-for="step in message.activities"
-          :key="step.id"
-          class="activity-line"
-          :class="[
-            `phase-${step.phase}`,
-            step.status === 'done' ? 'is-done' : '',
-            step.status === 'error' ? 'is-error' : '',
-            step.id === pulseStepId ? 'is-active' : '',
-          ]"
-        >
-          <span
-            v-if="step.id === pulseStepId"
-            class="activity-dot pulsing"
-            aria-hidden="true"
-          />
-          <span v-else class="activity-dot-spacer" aria-hidden="true" />
-          <span class="activity-label" :title="step.label">{{ step.label }}</span>
-        </div>
-      </div>
+      <AssistantActivities
+        v-if="message.activities?.length"
+        :activities="message.activities"
+        :show-cursor="showCursor"
+        :completed="Boolean(message.completedAt)"
+      />
 
       <!-- Reasoning / thinking block (fallback when no inline steps) -->
       <div v-if="message.reasoning && showInlineReasoning" class="reasoning-block">
@@ -105,6 +82,15 @@ const pulseStepId = computed(() => {
 
       <!-- Main content -->
       <div v-if="message.content" ref="contentRef" class="md-content" v-html="renderedContent" />
+      <div
+        v-if="message.completedAt && message.durationMs != null"
+        class="reply-meta"
+      >
+        用时 {{ fmtDuration(message.durationMs) }}
+        <template v-if="message.usage?.total">
+          · {{ fmtTokenCount(message.usage.total) }} tokens
+        </template>
+      </div>
       <div v-else-if="showCursor && !message.activities?.length" class="activity-line is-active standalone">
         <span class="activity-dot pulsing" aria-hidden="true" />
         <span class="activity-label">正在回复…</span>
@@ -137,6 +123,12 @@ const pulseStepId = computed(() => {
   background: var(--user-bubble);
   border: 1px solid rgba(108, 110, 247, 0.3);
 }
+.msg-time {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 6px;
+  text-align: right;
+}
 .user-text {
   color: var(--text);
   white-space: pre-wrap;
@@ -151,6 +143,12 @@ const pulseStepId = computed(() => {
 }
 
 .assistant-header { margin-bottom: 6px; }
+
+.reply-meta {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-3);
+}
 .model-tag {
   font-size: 11px;
   color: var(--text-3);
@@ -202,74 +200,25 @@ const pulseStepId = computed(() => {
   50% { opacity: 0.45; }
 }
 
-.activity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-2);
-}
-
-.activity-line {
+.activity-line.standalone {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.5;
-}
-
-.activity-line.standalone {
   padding: 4px 0;
-}
-
-.activity-line.is-active {
+  font-size: 12px;
   color: var(--text);
 }
 
-.activity-line.is-done {
-  color: var(--text-3);
-}
-
-.activity-line.is-error {
-  color: #f87171;
-}
-
-.activity-dot-spacer {
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-}
-
-.activity-dot {
+.activity-line.standalone .activity-dot {
   flex-shrink: 0;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent);
+  background: #a78bfa;
 }
 
-.activity-line.phase-think .activity-dot { background: #a78bfa; }
-.activity-line.phase-tool .activity-dot { background: #fb923c; }
-.activity-line.phase-output .activity-dot { background: #60a5fa; }
-.activity-line.standalone .activity-dot { background: #a78bfa; }
-
-.activity-dot.pulsing {
+.activity-line.standalone .activity-dot.pulsing {
   animation: activity-bounce 0.9s ease-in-out infinite;
-}
-
-.activity-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-style: normal;
-  letter-spacing: 0.01em;
 }
 
 @keyframes activity-bounce {

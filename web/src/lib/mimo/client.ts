@@ -20,7 +20,9 @@ export async function waitForMimoReady(timeoutMs = 15_000): Promise<void> {
     }
     await new Promise((r) => setTimeout(r, 400))
   }
-  throw new Error(`MiMo serve not ready: ${cfg.baseUrl}`)
+  throw new Error(
+    `MiMo serve 未就绪（${cfg.baseUrl}）。请确认：1) 已运行 start.bat 或 start-mimo-web.bat；2) 「MiMo 4096」窗口无报错；3) 使用 http://127.0.0.1:5173 打开页面`,
+  )
 }
 
 export async function createSession(directory: string): Promise<MimoSession> {
@@ -61,7 +63,7 @@ export function eventUrl(directory: string): string {
 }
 
 export type SessionMessage = {
-  info?: { role?: string; id?: string }
+  info?: { role?: string; id?: string; tokens?: Record<string, unknown> }
   parts?: Array<{ type?: string; text?: string; id?: string }>
 }
 

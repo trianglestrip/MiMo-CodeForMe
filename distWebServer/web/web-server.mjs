@@ -1,12 +1,17 @@
 import { createServer, request } from 'node:http'
-import { readFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = fileURLToPath(new URL('.', import.meta.url))
-const webDir = join(root, 'web')
+// 绿色版 Web 静态服务 + /mimo 反向代理（与 index.html 同目录）
+const webDir = fileURLToPath(new URL('.', import.meta.url))
 const port = Number(process.env.WEB_PORT ?? 5173)
 const mimo = process.env.MIMO_UPSTREAM ?? 'http://127.0.0.1:4096'
+
+writeFileSync(
+  join(webDir, 'mimo-config.js'),
+  `window.MIMO_TRACE_CONFIG={baseUrl:'/mimo',username:'mimocode',password:'mimocode-standalone'};\n`,
+)
 
 const mime = {
   '.html': 'text/html; charset=utf-8',

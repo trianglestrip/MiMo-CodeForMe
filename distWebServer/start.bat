@@ -1,81 +1,36 @@
 @echo off
+REM 一键启动 MiMo API + Web（绿色版）
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 set "ROOT=%CD%"
 
-set "MIMO_PORT=4096"
-set "WEB_PORT=5173"
-set "WORK_DIR=%ROOT%\work"
+where node >nul 2>&1 || (echo [ERROR] 未找到 Node.js & pause & exit /b 1)
+if not exist "%ROOT%\server\mimo.exe" (echo [ERROR] 缺少 server\mimo.exe，请先运行 script\build-dist-web-server.bat & pause & exit /b 1)
 
-if not "%~1"=="" set "WORK_DIR=%~1"
-set "WORK_DIR_URL=%WORK_DIR:\=/%"
+call "%~dp0stop.bat" /q
 
-echo === MiMoCode Web ????? ===
-echo   MiMo API: http://127.0.0.1:%MIMO_PORT%
-echo   Web:      http://127.0.0.1:%WEB_PORT%
-echo   Trace:    http://127.0.0.1:%WEB_PORT%/trace.html
-echo   Work dir: %WORK_DIR%
-echo.
+start "MiMo 4096" cmd /k call "%ROOT%\server\run-mimo.bat"
+timeout /t 2 /nobreak >nul
+start "Web 5173" cmd /k call "%ROOT%\web\start-web.bat"
 
-where node >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] Node.js not found.
-  pause
-  exit /b 1
-)
-
-if not exist "%ROOT%\server\mimo.exe" (
-  echo [ERROR] server\mimo.exe missing. Run script\build-dist-web-server.bat
-  pause
-  exit /b 1
-)
-
-if not exist "%WORK_DIR%" mkdir "%WORK_DIR%"
-
-echo [INFO] Free ports %MIMO_PORT% and %WEB_PORT% ...
-for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":%MIMO_PORT%" ^| findstr "LISTENING"') do taskkill /F /PID %%P >nul 2>&1
-for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":%WEB_PORT%" ^| findstr "LISTENING"') do taskkill /F /PID %%P >nul 2>&1
-timeout /t 1 /nobreak >nul
-
-echo [INFO] Writing mimo-config.js ...
-(
-echo window.MIMO_TRACE_CONFIG = {
-echo   baseUrl: '/mimo',
-echo   workDir: '%WORK_DIR_URL%',
-echo }
-) > "%ROOT%\web\mimo-config.js"
-
-echo [INFO] Starting MiMo serve ...
-start "MiMo 4096" cmd /k call "%ROOT%\server\start-serve.bat" "%WORK_DIR%"
-
-echo [INFO] Waiting for MiMo serve ...
+echo [INFO] 等待 MiMo serve ...
 set /a _W=0
 :WaitMimo
-curl -s http://127.0.0.1:%MIMO_PORT%/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 goto MimoReady
 set /a _W+=1
-if !_W! GEQ 60 goto MimoReady
+if !_W! GEQ 45 goto MimoFail
 timeout /t 1 /nobreak >nul
 goto WaitMimo
 
+:MimoFail
+echo [WARN] MiMo serve 未就绪，请查看「MiMo 4096」窗口是否有报错
+goto Done
+
 :MimoReady
-echo [INFO] Starting Web ...
-start "Web 5173" cmd /k node "%ROOT%\web-server.mjs"
+echo [OK] MiMo serve 就绪
 
-echo [INFO] Waiting for Web ...
-set /a _W=0
-:WaitWeb
-curl -s http://127.0.0.1:%WEB_PORT%/ 2>nul | findstr /C:"app" >nul 2>&1
-if not errorlevel 1 goto Ready
-set /a _W+=1
-if !_W! GEQ 45 goto Ready
-timeout /t 1 /nobreak >nul
-goto WaitWeb
-
-:Ready
-echo.
-echo [OK] MiMo API: http://127.0.0.1:%MIMO_PORT%/
-echo      Web:      http://127.0.0.1:%WEB_PORT%/
-echo      Trace:    http://127.0.0.1:%WEB_PORT%/trace.html
-echo      Close MiMo / Web windows to stop.
+:Done
+echo [OK] http://127.0.0.1:5173/  Trace: /trace.html
+echo      工作目录请在 Web 顶部栏设置
 exit /b 0

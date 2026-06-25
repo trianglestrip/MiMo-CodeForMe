@@ -31,7 +31,6 @@ if not exist node_modules (
 )
 
 echo [INFO] Building web ...
-set "VITE_MIMO_WORK_DIR=./work"
 call npm run build
 if errorlevel 1 (
   echo [ERROR] web build failed.
@@ -42,7 +41,6 @@ if errorlevel 1 (
 echo [INFO] Copying web dist ...
 if not exist "%OUT%\web" mkdir "%OUT%\web"
 xcopy /E /Y /Q "%WEB%\dist\*" "%OUT%\web\" >nul
-if exist "%WEB%\public\trace.html" copy /Y "%WEB%\public\trace.html" "%OUT%\web\trace.html" >nul
 
 echo [INFO] Bundling server (mimo.exe only) ...
 set "SERVER=%OUT%\server"

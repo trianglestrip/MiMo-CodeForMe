@@ -4,16 +4,12 @@ cd /d "%~dp0.."
 
 set "MIMO_PORT=4096"
 set "WEB_PORT=5173"
-set "WORK_DIR=%CD%"
 
-if not "%~1"=="" set "WORK_DIR=%~1"
-set "WORK_DIR_URL=%WORK_DIR:\=/%"
-
-echo === MiMoCode Web + mimo serve ===
+echo === BcAI Web + mimo serve ===
 echo   MiMo serve: http://127.0.0.1:%MIMO_PORT%
 echo   Web:        http://127.0.0.1:%WEB_PORT%
 echo   Trace:      http://127.0.0.1:%WEB_PORT%/trace.html
-echo   Work dir:   %WORK_DIR%
+echo   工作目录请在 Web 顶部栏设置
 echo.
 
 where node >nul 2>&1
@@ -51,12 +47,11 @@ echo window.MIMO_TRACE_CONFIG = {
 echo   baseUrl: '/mimo',
 echo   username: 'mimocode',
 echo   password: 'mimocode-standalone',
-echo   workDir: '%WORK_DIR_URL%',
 echo }
 ) > "%~dp0..\web\public\mimo-config.js"
 
 echo [INFO] Starting MiMo serve ...
-start "MiMo 4096" cmd /k call "%~dp0start-mimo-serve.bat" "%WORK_DIR%" %MIMO_PORT%
+start "MiMo 4096" cmd /k call "%~dp0start-mimo-serve.bat" "" %MIMO_PORT%
 
 echo [INFO] Waiting for MiMo serve ...
 set /a _W=0
@@ -70,7 +65,7 @@ goto WaitMimo
 
 :MimoReady
 echo [INFO] Starting Web ...
-start "Web 5173" cmd /k call "%~dp0run-web-dev.bat" "%WORK_DIR_URL%"
+start "Web 5173" cmd /k call "%~dp0run-web-dev.bat"
 
 echo [INFO] Waiting for Web ...
 set /a _W=0

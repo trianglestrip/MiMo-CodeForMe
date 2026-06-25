@@ -4,13 +4,14 @@ MiMoCode 绿色版 (distWebServer)
 目录结构
   start.bat            一键启动（API + Web）
   stop.bat             停止 4096 / 5173
-  web-server.mjs       Node 静态服务 + /mimo 代理
   server/
     mimo.exe           MiMo API 二进制（构建时下载，约 140MB）
     mimo-config.json   模型与 provider 配置
     mimo-auth.json     鉴权配置（启动时写入 .dev-home）
-    start-serve.bat    启动 mimo serve
-  web/                 前端生产构建（构建时生成）
+    run-mimo.bat       启动 mimo serve（由 start.bat 调用）
+  web/                 前端静态文件 + Web 服务
+    start-web.bat      启动 Web(5173)，由 start.bat 调用
+    web-server.mjs     静态服务 + /mimo 代理
 
   首次 start.bat 会自动创建 work/ 作为默认工作目录
 
@@ -21,6 +22,8 @@ MiMoCode 绿色版 (distWebServer)
   start.bat
   start.bat D:\your\project
   stop.bat
+
+.bat 文件为 GBK 编码；Cursor 中若中文乱码，请用 GBK/GB2312 重新打开。
 
 拷贝到其他电脑
   复制整个 distWebServer 文件夹即可。
