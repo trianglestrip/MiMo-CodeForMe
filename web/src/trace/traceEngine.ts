@@ -1,4 +1,5 @@
 import { computed, reactive, ref, shallowRef } from 'vue'
+import { phaseTag, registerPartKind, resolveDeltaKind, traceStepFromPart } from '@/lib/partPhase'
 import { SKIP_EVENT_TYPES } from './constants'
 import { formatToolDisplay } from './toolDisplay'
 import type { MimoBusEvent, SessionMessage, TimelineSnapshot, TraceSession, TraceStep, TraceTurn } from './types'
@@ -198,10 +199,8 @@ export function createTraceEngine(getWorkDir: () => string) {
     if (!deltaRaf) deltaRaf = requestAnimationFrame(flushPendingDeltas)
   }
 
-  function registerPartKind(ses: TraceSession, part: Record<string, unknown>) {
-    if (part.id && (part.type === 'reasoning' || part.type === 'text')) {
-      runtime(ses).partKinds.set(String(part.id), String(part.type))
-    }
+  function registerPartKindLocal(ses: TraceSession, part: Record<string, unknown>) {
+    registerPartKind(runtime(ses).partKinds, part)
   }
 
   function handleDelta(ses: TraceSession, props: Record<string, unknown>) {
@@ -210,30 +209,31 @@ export function createTraceEngine(getWorkDir: () => string) {
     const delta = props.delta
     if (typeof partID !== 'string' || delta == null) return
     touchSession(ses)
-    const kind =
-      runtime(ses).partKinds.get(partID) ||
-      (props.field === 'reasoning' ? 'reasoning' : 'text')
+    const kind = resolveDeltaKind(
+      runtime(ses).partKinds,
+      partID,
+      typeof props.field === 'string' ? props.field : undefined,
+    )
     if (kind === 'reasoning') {
-      queueDelta(ses, `think:${partID}`, 'think', '思考', preview(String(delta), 80), String(delta))
+      queueDelta(ses, `think:${partID}`, 'think', phaseTag('think'), preview(String(delta), 80), String(delta))
       return
     }
-    queueDelta(ses, `out:${partID}`, 'output', '文字输出', preview(String(delta), 80) || '…', String(delta))
+    queueDelta(ses, `out:${partID}`, 'output', phaseTag('output'), preview(String(delta), 80) || '…', String(delta))
   }
 
-  function handleTextPart(ses: TraceSession, part: Record<string, unknown>) {
+  function handleGenericPart(ses: TraceSession, part: Record<string, unknown>) {
     if (!isActiveSession(ses.id)) return
     touchSession(ses)
-    const partID = part.id
-    if (typeof partID !== 'string') return
-    registerPartKind(ses, part)
+    const mapped = traceStepFromPart(part)
+    if (!mapped) return
     const text = typeof part.text === 'string' ? part.text : ''
     const time = part.time as { end?: number } | undefined
-    const done = Boolean(time?.end)
-    if (part.type === 'reasoning') {
-      upsertStep(ses, `think:${partID}`, 'think', '思考', preview(text, 80) || '推理中…', { text, done })
+    const done = mapped.done || Boolean(time?.end)
+    if (part.type === 'reasoning' || part.type === 'text') {
+      upsertStep(ses, mapped.key, mapped.cls, mapped.tag, mapped.title, { text, done })
       return
     }
-    upsertStep(ses, `out:${partID}`, 'output', '文字输出', preview(text, 80) || '输出中…', { text, done })
+    upsertStep(ses, mapped.key, mapped.cls, mapped.tag, mapped.title, { done })
   }
 
   function handleTool(ses: TraceSession, part: Record<string, unknown>) {
@@ -254,7 +254,7 @@ export function createTraceEngine(getWorkDir: () => string) {
       subOk: status === 'completed' || status === 'error' ? display.ok : undefined,
       text: status === 'completed' || status === 'error' ? display.text || undefined : undefined,
     }
-    upsertStep(ses, `tool:${callID}`, 'tool', '调用', display.title, stepOpts)
+    upsertStep(ses, `tool:${callID}`, 'tool', phaseTag('tool'), display.title, stepOpts)
   }
 
   function handleUserText(ses: TraceSession, messageID: string, text: string) {
@@ -314,7 +314,7 @@ export function createTraceEngine(getWorkDir: () => string) {
       const sid = raw.properties?.sessionID
       const ses = getSession(sid ? String(sid) : null)
       if (!isActiveSession(ses.id)) return
-      upsertStep(ses, `err:${Date.now()}`, 'tool', '错误', String(raw.properties?.error || 'session error'), {
+      upsertStep(ses, `err:${Date.now()}`, 'system', phaseTag('system'), String(raw.properties?.error || 'session error'), {
         done: true,
         subOk: false,
         sub: String(raw.properties?.error || 'session error'),
@@ -333,7 +333,7 @@ export function createTraceEngine(getWorkDir: () => string) {
     if (type === 'message.part.updated') {
       const part = (raw.properties?.part || {}) as Record<string, unknown>
       const ses = getSession(eventSessionID(raw, part))
-      registerPartKind(ses, part)
+      registerPartKindLocal(ses, part)
       const role = part.messageID ? runtime(ses).messageRoles.get(String(part.messageID)) : undefined
       if (part.type === 'tool') {
         handleTool(ses, part)
@@ -343,9 +343,7 @@ export function createTraceEngine(getWorkDir: () => string) {
         handleUserText(ses, String(part.messageID), typeof part.text === 'string' ? part.text : '')
         return
       }
-      if (part.type === 'text' || part.type === 'reasoning') {
-        handleTextPart(ses, part)
-      }
+      handleGenericPart(ses, part)
       return
     }
 
@@ -379,11 +377,8 @@ export function createTraceEngine(getWorkDir: () => string) {
         if (msg.info?.id) runtime(ses).messageRoles.set(msg.info.id, 'assistant')
         if (!runtime(ses).currentTurn) startTurn(ses, '（历史回放）')
         for (const part of msg.parts ?? []) {
-          if (part.type === 'step-start' || part.type === 'step-finish') continue
           if (part.type === 'tool') handleTool(ses, part as Record<string, unknown>)
-          else if (part.type === 'reasoning' || part.type === 'text') {
-            handleTextPart(ses, { ...part, time: part.time ?? { end: Date.now() } })
-          }
+          else handleGenericPart(ses, { ...part, time: part.time ?? { end: Date.now() } })
         }
         finishTurn(ses)
       }

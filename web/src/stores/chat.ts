@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { ActivityPhase } from '@/lib/partPhase'
+
+export type { ActivityPhase } from '@/lib/partPhase'
 
 export interface ToolCallPayload {
   id: string
@@ -7,7 +10,6 @@ export interface ToolCallPayload {
   function: { name: string; arguments: string }
 }
 
-export type ActivityPhase = 'think' | 'tool' | 'output'
 export type ActivityStatus = 'running' | 'done' | 'error'
 
 export interface ActivityStep {

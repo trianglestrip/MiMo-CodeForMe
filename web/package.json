@@ -11,6 +11,7 @@
     "trace:test": "bun script/trace-simulate.ts"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.2.0",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.5",
     "pinia": "^3.0.4",

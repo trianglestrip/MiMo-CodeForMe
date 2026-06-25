@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { phaseTagIconClass } from '@/lib/phaseIcons'
 import type { TraceStep } from '../types'
 
 defineProps<{
@@ -12,7 +13,10 @@ defineProps<{
       <div class="step-num">{{ step.num }}</div>
       <div class="step-main">
         <div class="step-title">
-          <span class="tag">{{ step.tag }}</span>
+          <span class="tag">
+            <i :class="phaseTagIconClass(step.cls)" class="tag-icon" aria-hidden="true" />
+            {{ step.tag }}
+          </span>
           <span class="step-head-text">{{ step.title }}</span>
         </div>
         <div v-if="step.intent" class="step-intent">{{ step.intent }}</div>

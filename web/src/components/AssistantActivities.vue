@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import FlowStrip from '@/components/FlowStrip.vue'
+import { phaseIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
 import type { ActivityStep } from '@/stores/chat'
 
 const props = defineProps<{
@@ -66,7 +67,21 @@ onMounted(() => {
           aria-hidden="true"
         />
         <span v-else class="activity-dot-spacer" aria-hidden="true" />
+        <i
+          class="activity-phase-icon"
+          :class="[
+            phaseIconClass(step.phase),
+            step.status === 'error' ? 'is-error-icon' : '',
+          ]"
+          aria-hidden="true"
+        />
         <span class="activity-label" :title="step.label">{{ step.label }}</span>
+        <i
+          v-if="step.phase === 'tool' && toolStatusIconClass(step.status)"
+          class="activity-status-icon"
+          :class="[toolStatusIconClass(step.status)!, step.status === 'error' ? 'is-error-icon' : '']"
+          aria-hidden="true"
+        />
       </div>
     </div>
 
@@ -112,13 +127,7 @@ onMounted(() => {
 }
 
 .activity-line.is-error {
-  color: #f87171;
-}
-
-.activity-dot-spacer {
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
+  color: var(--phase-error-muted);
 }
 
 .activity-dot {
@@ -129,9 +138,32 @@ onMounted(() => {
   background: var(--accent);
 }
 
-.activity-line.phase-think .activity-dot { background: #a78bfa; }
-.activity-line.phase-tool .activity-dot { background: #fb923c; }
-.activity-line.phase-output .activity-dot { background: #60a5fa; }
+.activity-phase-icon {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+}
+
+.activity-status-icon {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--phase-output-muted);
+}
+
+.activity-status-icon.is-error-icon {
+  color: var(--phase-error-muted);
+}
+
+.activity-dot-spacer {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+}
+
+.activity-line.is-error .activity-phase-icon {
+  color: var(--phase-error-muted);
+}
 
 .activity-dot.pulsing {
   animation: activity-bounce 0.9s ease-in-out infinite;

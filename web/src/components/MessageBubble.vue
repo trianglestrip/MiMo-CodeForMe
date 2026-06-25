@@ -2,6 +2,7 @@
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { renderMarkdown, highlightCodeBlocks } from '@/lib/markdown'
 import { fmtBeijingTime, fmtDuration, fmtTokenCount } from '@/lib/formatTime'
+import { phaseIconClass } from '@/lib/phaseIcons'
 import AssistantActivities from '@/components/AssistantActivities.vue'
 import type { ChatMessage } from '@/stores/chat'
 
@@ -27,10 +28,6 @@ watch(() => props.message.content, () => {
 onMounted(syncHighlight)
 
 const reasoningOpen = ref(false)
-
-const showInlineReasoning = computed(
-  () => !(props.message.activities ?? []).some((s) => s.phase === 'think'),
-)
 </script>
 
 <template>
@@ -67,13 +64,14 @@ const showInlineReasoning = computed(
         :completed="Boolean(message.completedAt)"
       />
 
-      <!-- Reasoning / thinking block (fallback when no inline steps) -->
-      <div v-if="message.reasoning && showInlineReasoning" class="reasoning-block">
+      <!-- Reasoning / thinking block -->
+      <div v-if="message.reasoning" class="reasoning-block phase-think">
         <button class="reasoning-toggle" @click="reasoningOpen = !reasoningOpen">
           <svg :style="{ transform: reasoningOpen ? 'rotate(90deg)' : 'none' }"
             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
+          <i :class="phaseIconClass('think')" class="reasoning-tag-icon" aria-hidden="true" />
           <span>思考过程</span>
           <span class="reasoning-len">{{ message.reasoning.length }} 字符</span>
         </button>
@@ -91,8 +89,9 @@ const showInlineReasoning = computed(
           · {{ fmtTokenCount(message.usage.total) }} tokens
         </template>
       </div>
-      <div v-else-if="showCursor && !message.activities?.length" class="activity-line is-active standalone">
+      <div v-else-if="showCursor && !message.activities?.length" class="activity-line is-active standalone phase-think">
         <span class="activity-dot pulsing" aria-hidden="true" />
+        <i :class="phaseIconClass('think')" class="activity-phase-icon" aria-hidden="true" />
         <span class="activity-label">正在回复…</span>
       </div>
       <p v-else-if="!showCursor && !message.content" class="empty-reply">（等待回复…）</p>
@@ -157,10 +156,9 @@ const showInlineReasoning = computed(
   border-radius: 10px;
 }
 
-/* Reasoning block */
 .reasoning-block {
   margin-bottom: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--phase-border);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -170,29 +168,26 @@ const showInlineReasoning = computed(
   gap: 6px;
   width: 100%;
   padding: 7px 10px;
-  background: var(--bg-3);
-  color: var(--text-3);
   font-size: 12px;
   text-align: left;
   transition: color 0.15s;
 }
-.reasoning-toggle svg { transition: transform 0.2s; flex-shrink: 0; }
-.reasoning-toggle:hover { color: var(--text-2); }
+.reasoning-tag-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
 .reasoning-len {
   margin-left: auto;
   font-size: 11px;
-  color: var(--text-3);
+  opacity: 0.75;
 }
 .reasoning-content {
   padding: 10px 12px;
   font-size: 12px;
-  color: var(--text-3);
   white-space: pre-wrap;
   line-height: 1.65;
-  background: var(--bg-2);
   max-height: 300px;
   overflow-y: auto;
-  border-top: 1px solid var(--border);
 }
 
 @keyframes pulse {
@@ -214,7 +209,12 @@ const showInlineReasoning = computed(
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #a78bfa;
+  background: var(--phase-think-muted);
+}
+
+.activity-line.standalone .activity-phase-icon {
+  color: var(--phase-think-muted);
+  font-size: 11px;
 }
 
 .activity-line.standalone .activity-dot.pulsing {

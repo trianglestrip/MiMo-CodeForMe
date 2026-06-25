@@ -1,3 +1,6 @@
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+@import './styles/phase.css';
+
 /* ===== BcAI Web UI — Light/Dark Theme ===== */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -23,6 +26,39 @@
   --radius: 12px;
   --radius-sm: 6px;
   --font-mono: Consolas, 'Courier New', monospace;
+
+  --phase-think: #7c3aed;
+  --phase-think-muted: #a78bfa;
+  --phase-think-bg: rgba(124, 58, 237, 0.08);
+  --phase-think-border: rgba(124, 58, 237, 0.28);
+  --phase-tool: #d97706;
+  --phase-tool-muted: #fbbf24;
+  --phase-tool-bg: rgba(217, 119, 6, 0.08);
+  --phase-tool-border: rgba(217, 119, 6, 0.28);
+  --phase-output: #059669;
+  --phase-output-muted: #34d399;
+  --phase-output-bg: rgba(5, 150, 105, 0.08);
+  --phase-output-border: rgba(5, 150, 105, 0.28);
+  --phase-step: #64748b;
+  --phase-step-muted: #94a3b8;
+  --phase-step-bg: rgba(100, 116, 139, 0.1);
+  --phase-step-border: rgba(100, 116, 139, 0.28);
+  --phase-file: #0891b2;
+  --phase-file-muted: #22d3ee;
+  --phase-file-bg: rgba(8, 145, 178, 0.08);
+  --phase-file-border: rgba(8, 145, 178, 0.28);
+  --phase-delegate: #6366f1;
+  --phase-delegate-muted: #818cf8;
+  --phase-delegate-bg: rgba(99, 102, 241, 0.08);
+  --phase-delegate-border: rgba(99, 102, 241, 0.28);
+  --phase-system: #71717a;
+  --phase-system-muted: #a1a1aa;
+  --phase-system-bg: rgba(113, 113, 122, 0.1);
+  --phase-system-border: rgba(113, 113, 122, 0.28);
+  --phase-error: #dc2626;
+  --phase-error-muted: #f87171;
+  --phase-end: #0891b2;
+  --phase-end-muted: #22d3ee;
 
   /* Code theme for light mode */
   --code-bg: #f5f5f5;
@@ -52,6 +88,39 @@
   --free-bg: rgba(52, 211, 153, 0.15);
   --error: #f87171;
   --user-bubble: #3f3f46;
+
+  --phase-think: #a78bfa;
+  --phase-think-muted: #c4b5fd;
+  --phase-think-bg: rgba(167, 139, 250, 0.12);
+  --phase-think-border: rgba(167, 139, 250, 0.35);
+  --phase-tool: #fb923c;
+  --phase-tool-muted: #fbbf24;
+  --phase-tool-bg: rgba(251, 146, 60, 0.12);
+  --phase-tool-border: rgba(251, 146, 60, 0.35);
+  --phase-output: #34d399;
+  --phase-output-muted: #6ee7b7;
+  --phase-output-bg: rgba(52, 211, 153, 0.12);
+  --phase-output-border: rgba(52, 211, 153, 0.35);
+  --phase-step: #94a3b8;
+  --phase-step-muted: #cbd5e1;
+  --phase-step-bg: rgba(148, 163, 184, 0.12);
+  --phase-step-border: rgba(148, 163, 184, 0.35);
+  --phase-file: #22d3ee;
+  --phase-file-muted: #67e8f9;
+  --phase-file-bg: rgba(34, 211, 238, 0.1);
+  --phase-file-border: rgba(34, 211, 238, 0.35);
+  --phase-delegate: #818cf8;
+  --phase-delegate-muted: #a5b4fc;
+  --phase-delegate-bg: rgba(129, 140, 248, 0.12);
+  --phase-delegate-border: rgba(129, 140, 248, 0.35);
+  --phase-system: #a1a1aa;
+  --phase-system-muted: #d4d4d8;
+  --phase-system-bg: rgba(161, 161, 170, 0.12);
+  --phase-system-border: rgba(161, 161, 170, 0.35);
+  --phase-error: #f87171;
+  --phase-error-muted: #fca5a5;
+  --phase-end: #22d3ee;
+  --phase-end-muted: #67e8f9;
 
   /* Code theme for dark mode */
   --code-bg: #1e1e1e;

@@ -1,4 +1,6 @@
-export type StepCls = 'think' | 'tool' | 'output'
+import type { ActivityPhase } from '@/lib/partPhase'
+
+export type StepCls = ActivityPhase
 
 export interface TraceStep {
   key: string

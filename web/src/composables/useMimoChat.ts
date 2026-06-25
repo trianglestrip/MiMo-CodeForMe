@@ -8,10 +8,15 @@ import {
   waitForMimoReady,
 } from '@/lib/mimo/client'
 import { getWorkDir, WORK_DIR_CHANGED } from '@/lib/workDir'
-import { inlineSnippet, thinkActivityLabel, toolActivityLabel } from '@/lib/mimo/toolLabel'
+import { inlineSnippet, thinkActivityLabel } from '@/lib/mimo/toolLabel'
 import { subscribeMimoEvents } from '@/lib/mimo/eventStream'
 import { mapMimoEvent, type TraceEvent } from '@/lib/mimo/traceMapper'
 import { usageFromMessageInfo } from '@/lib/mimo/tokens'
+import {
+  partActivityFromUpdate,
+  registerPartKind,
+  resolveDeltaKind,
+} from '@/lib/partPhase'
 import { useChatStore } from '@/stores/chat'
 
 const traceEvents = ref<TraceEvent[]>([])
@@ -23,6 +28,8 @@ let streamDirectory: string | null = null
 const sessionByConversation = new Map<string, string>()
 const activeSessionFilter = ref<string | null>(null)
 const assistantTextParts = new Set<string>()
+const partKinds = new Map<string, string>()
+const messageRoles = new Map<string, string>()
 
 function workDir(): string {
   const dir = getWorkDir().trim()
@@ -121,8 +128,20 @@ function handleMessageUpdated(raw: { type?: string; properties?: Record<string, 
   if (!conv) return
   if (sessionID && sessionByConversation.get(conv.id) !== sessionID) return
   const info = raw.properties?.info as Record<string, unknown> | undefined
-  if (!info || info.role !== 'assistant') return
+  if (!info) return
+  if (typeof info.id === 'string' && typeof info.role === 'string') {
+    messageRoles.set(info.id, info.role)
+  }
+  if (info.role !== 'assistant') return
   applyAssistantUsage(info)
+}
+
+function pushPartActivity(part: Record<string, unknown>) {
+  const chat = useChatStore()
+  const role = typeof part.messageID === 'string' ? messageRoles.get(part.messageID) : undefined
+  const activity = partActivityFromUpdate(part, role)
+  if (!activity) return
+  chat.pushAssistantActivity(activity)
 }
 
 function handleChatPart(raw: { type?: string; properties?: Record<string, unknown> }, sessionID?: string) {
@@ -139,29 +158,30 @@ function handleChatPart(raw: { type?: string; properties?: Record<string, unknow
     const props = raw.properties ?? {}
     const partID = typeof props.partID === 'string' ? props.partID : undefined
     const delta = props.delta
-    const field = props.field
-    if (field === 'reasoning') {
-      const key = partID ?? 'think'
-      if (delta != null) {
-        const last = lastAssistantMessage()
-        if (last) {
-          last.reasoning = `${last.reasoning ?? ''}${String(delta)}`
-          chat.pushAssistantActivity({
-            key,
-            phase: 'think',
-            label: thinkActivityLabel(last.reasoning),
-            status: 'running',
-          })
-        }
+    const field = typeof props.field === 'string' ? props.field : undefined
+    if (!partID || delta == null) return
+
+    const kind = resolveDeltaKind(partKinds, partID, field)
+    if (kind === 'reasoning') {
+      const last = lastAssistantMessage()
+      if (last) {
+        last.reasoning = `${last.reasoning ?? ''}${String(delta)}`
+        chat.pushAssistantActivity({
+          key: `reasoning:${partID}`,
+          phase: 'think',
+          label: thinkActivityLabel(last.reasoning),
+          status: 'running',
+        })
+        conv.updatedAt = Date.now()
       }
       return
     }
-    if (!partID || delta == null || props.field !== 'text') return
-    if (!assistantTextParts.has(partID)) return
+
+    if (kind !== 'text' || !assistantTextParts.has(partID)) return
     chat.appendToLastAssistant(String(delta))
     const preview = inlineSnippet(lastAssistantContent())
     chat.pushAssistantActivity({
-      key: partID,
+      key: `text:${partID}`,
       phase: 'output',
       label: preview ? `输出 · ${preview}` : '文字输出…',
       status: 'running',
@@ -174,53 +194,26 @@ function handleChatPart(raw: { type?: string; properties?: Record<string, unknow
   const part = raw.properties?.part as Record<string, unknown> | undefined
   if (!part) return
 
+  registerPartKind(partKinds, part)
+
+  if (part.type === 'text') {
+    const partID = typeof part.id === 'string' ? part.id : undefined
+    const role = typeof part.messageID === 'string' ? messageRoles.get(part.messageID) : undefined
+    if (partID && role !== 'user') assistantTextParts.add(partID)
+    const text = typeof part.text === 'string' ? part.text : ''
+    if (text && role !== 'user') chat.setLastAssistantContent(text)
+  }
+
   if (part.type === 'reasoning') {
     const text = typeof part.text === 'string' ? part.text : ''
-    const partID = typeof part.id === 'string' ? part.id : 'think'
-    chat.pushAssistantActivity({
-      key: partID,
-      phase: 'think',
-      label: thinkActivityLabel(text),
-      status: 'running',
-    })
-    if (!text) return
     const last = lastAssistantMessage()
     if (last && text.length >= (last.reasoning?.length ?? 0)) {
       last.reasoning = text
       conv.updatedAt = Date.now()
     }
-    return
   }
 
-  if (part.type === 'tool') {
-    const tool = typeof part.tool === 'string' ? part.tool : 'tool'
-    const callID = typeof part.callID === 'string' ? part.callID : typeof part.id === 'string' ? part.id : tool
-    const state = (part.state ?? {}) as Record<string, unknown>
-    const status = typeof state.status === 'string' ? state.status : 'pending'
-    const label = toolActivityLabel(tool, state.input as Record<string, unknown> | undefined)
-    if (status === 'running' || status === 'pending') {
-      chat.pushAssistantActivity({ key: callID, phase: 'tool', label: `调用 ${label}`, status: 'running' })
-    } else if (status === 'error') {
-      chat.pushAssistantActivity({ key: callID, phase: 'tool', label: `调用 ${label} · 失败`, status: 'error' })
-    } else {
-      chat.pushAssistantActivity({ key: callID, phase: 'tool', label: `调用 ${label} · 完成`, status: 'done' })
-    }
-    return
-  }
-
-  if (part.type !== 'text') return
-  const partID = typeof part.id === 'string' ? part.id : undefined
-  if (partID) assistantTextParts.add(partID)
-  const text = typeof part.text === 'string' ? part.text : ''
-  if (text) {
-    chat.pushAssistantActivity({
-      key: partID ?? 'output',
-      phase: 'output',
-      label: `输出 · ${inlineSnippet(text)}`,
-      status: 'running',
-    })
-    chat.setLastAssistantContent(text)
-  }
+  pushPartActivity(part)
 }
 
 const SESSION_MAP_KEY = 'mimo-web-session-map'
@@ -277,6 +270,7 @@ export async function sendViaMimo(userContent: string): Promise<void> {
   chat.pushAssistantActivity({ key: 'wait', phase: 'think', label: '等待 MiMo 响应…', status: 'running' })
   const sessionID = await ensureSession(conv.id)
   assistantTextParts.clear()
+  partKinds.clear()
 
   try {
     const before = await fetchSessionMessages(sessionID, directory)

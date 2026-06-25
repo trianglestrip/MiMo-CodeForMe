@@ -1,0 +1,232 @@
+/* Unified AI message phase colors — used by chat activities, flow strip, reasoning block, trace */
+
+.phase-think,
+.reasoning-block {
+  --phase-fg: var(--phase-think);
+  --phase-fg-muted: var(--phase-think-muted);
+  --phase-bg: var(--phase-think-bg);
+  --phase-border: var(--phase-think-border);
+}
+
+.phase-tool {
+  --phase-fg: var(--phase-tool);
+  --phase-fg-muted: var(--phase-tool-muted);
+  --phase-bg: var(--phase-tool-bg);
+  --phase-border: var(--phase-tool-border);
+}
+
+.phase-output {
+  --phase-fg: var(--phase-output);
+  --phase-fg-muted: var(--phase-output-muted);
+  --phase-bg: var(--phase-output-bg);
+  --phase-border: var(--phase-output-border);
+}
+
+.phase-step {
+  --phase-fg: var(--phase-step);
+  --phase-fg-muted: var(--phase-step-muted);
+  --phase-bg: var(--phase-step-bg);
+  --phase-border: var(--phase-step-border);
+}
+
+.phase-file {
+  --phase-fg: var(--phase-file);
+  --phase-fg-muted: var(--phase-file-muted);
+  --phase-bg: var(--phase-file-bg);
+  --phase-border: var(--phase-file-border);
+}
+
+.phase-delegate {
+  --phase-fg: var(--phase-delegate);
+  --phase-fg-muted: var(--phase-delegate-muted);
+  --phase-bg: var(--phase-delegate-bg);
+  --phase-border: var(--phase-delegate-border);
+}
+
+.phase-system {
+  --phase-fg: var(--phase-system);
+  --phase-fg-muted: var(--phase-system-muted);
+  --phase-bg: var(--phase-system-bg);
+  --phase-border: var(--phase-system-border);
+}
+
+/* Activity list */
+.activity-line[class*='phase-'] .activity-dot {
+  background: var(--phase-fg-muted);
+}
+
+.activity-line[class*='phase-'] .activity-phase-icon {
+  color: var(--phase-fg-muted);
+}
+
+.activity-line[class*='phase-'].is-active {
+  color: var(--text);
+}
+
+.activity-line[class*='phase-'].is-active .activity-phase-icon {
+  color: var(--phase-fg);
+}
+
+.activity-line.is-error .activity-phase-icon,
+.activity-line.is-error .activity-status-icon {
+  color: var(--phase-error-muted);
+}
+
+/* Flow strip nodes */
+.flow-node.node-think {
+  background: var(--phase-think);
+  color: #fff;
+  border-color: var(--phase-think-muted);
+}
+
+.flow-node.node-tool {
+  background: var(--phase-tool);
+  color: #fff;
+  border-color: var(--phase-tool-muted);
+}
+
+.flow-node.node-tool-err {
+  background: var(--phase-error);
+  color: #fff;
+  border-color: var(--phase-error-muted);
+}
+
+.flow-node.node-output {
+  background: var(--phase-output);
+  color: #fff;
+  border-color: var(--phase-output-muted);
+}
+
+.flow-node.node-step {
+  background: var(--phase-step);
+  color: #fff;
+  border-color: var(--phase-step-muted);
+}
+
+.flow-node.node-file {
+  background: var(--phase-file);
+  color: #fff;
+  border-color: var(--phase-file-muted);
+}
+
+.flow-node.node-delegate {
+  background: var(--phase-delegate);
+  color: #fff;
+  border-color: var(--phase-delegate-muted);
+}
+
+.flow-node.node-system {
+  background: var(--phase-system);
+  color: #fff;
+  border-color: var(--phase-system-muted);
+}
+
+.flow-node.node-end {
+  background: var(--phase-end);
+  color: #fff;
+  border-color: var(--phase-end-muted);
+}
+
+.flow-strip.active {
+  background: color-mix(in srgb, var(--phase-think) 5%, var(--bg-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--phase-think) 18%, transparent);
+}
+
+.flow-strip.embedded.active {
+  background: color-mix(in srgb, var(--phase-think) 5%, var(--bg-2));
+}
+
+/* Reasoning / think content block */
+.reasoning-block {
+  border-color: var(--phase-border);
+}
+
+.reasoning-toggle {
+  background: var(--phase-bg);
+  color: var(--phase-fg);
+}
+
+.reasoning-toggle:hover {
+  color: var(--phase-fg-muted);
+}
+
+.reasoning-toggle .reasoning-tag-icon {
+  color: var(--phase-fg-muted);
+}
+
+.reasoning-content {
+  background: var(--phase-bg);
+  border-top-color: var(--phase-border);
+  color: var(--text-2);
+}
+
+/* Trace step tags */
+.step-think .tag,
+.step-think .step-num {
+  color: var(--phase-think);
+}
+
+.step-think .step-num {
+  background: var(--phase-think-bg);
+}
+
+.step-tool .tag,
+.step-tool .step-num {
+  color: var(--phase-tool);
+}
+
+.step-tool .step-num {
+  background: var(--phase-tool-bg);
+}
+
+.step-output .tag,
+.step-output .step-num {
+  color: var(--phase-output);
+}
+
+.step-output .step-num {
+  background: var(--phase-output-bg);
+}
+
+.step-step .tag,
+.step-step .step-num {
+  color: var(--phase-step);
+}
+
+.step-step .step-num {
+  background: var(--phase-step-bg);
+}
+
+.step-file .tag,
+.step-file .step-num {
+  color: var(--phase-file);
+}
+
+.step-file .step-num {
+  background: var(--phase-file-bg);
+}
+
+.step-delegate .tag,
+.step-delegate .step-num {
+  color: var(--phase-delegate);
+}
+
+.step-delegate .step-num {
+  background: var(--phase-delegate-bg);
+}
+
+.step-system .tag,
+.step-system .step-num {
+  color: var(--phase-system);
+}
+
+.step-system .step-num {
+  background: var(--phase-system-bg);
+}
+
+.step-preview.live {
+  border-left: 3px solid var(--phase-fg, var(--accent));
+}
+
+.step-think .step-preview.live { border-left-color: var(--phase-think); }
+.step-output .step-preview.live { border-left-color: var(--phase-output); }

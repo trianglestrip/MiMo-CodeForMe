@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { activityFlowLabel, flowNodeClass } from '@/lib/flowLabels'
+import { activityFlowLabel } from '@/lib/flowLabels'
+import { flowNodeClass } from '@/lib/partPhase'
+import { phaseIconClass, toolStatusIconClass, flowEndIconClass } from '@/lib/phaseIcons'
 import type { ActivityStep } from '@/stores/chat'
 
 const props = defineProps<{
@@ -10,13 +12,20 @@ const props = defineProps<{
   embedded?: boolean
 }>()
 
-const doneSteps = computed(() =>
+const flowSteps = computed(() =>
   props.activities
-    .filter((a) => a.status === 'done' || a.status === 'error')
+    .filter((a) => !(a.key === 'wait' && a.status === 'done'))
+    .filter(
+      (a) =>
+        a.status === 'done' ||
+        a.status === 'error' ||
+        (props.active && a.status === 'running'),
+    )
     .map((a) => ({
       key: a.key,
       cls: a.phase,
       label: activityFlowLabel(a.phase, a.label, a.status),
+      status: a.status,
       subOk: a.phase === 'tool' ? a.status !== 'error' : undefined,
     })),
 )
@@ -26,23 +35,45 @@ const doneSteps = computed(() =>
   <div class="flow-strip" :class="{ active, done, embedded }">
     <div class="section-label flow-label">调用流程</div>
     <div class="flow-strip-track">
-      <template v-if="doneSteps.length">
-        <template v-for="(step, index) in doneSteps" :key="step.key">
+      <template v-if="flowSteps.length">
+        <div
+          v-for="(step, index) in flowSteps"
+          :key="step.key"
+          class="flow-step-group"
+        >
           <span v-if="index > 0" class="flow-arrow" aria-hidden="true">→</span>
           <div
             class="flow-node"
-            :class="[flowNodeClass(step.cls, step.subOk), { 'node-new': index === doneSteps.length - 1 && active }]"
+            :class="[
+              flowNodeClass(step.cls, step.subOk),
+              {
+                'node-new': index === flowSteps.length - 1 && active && step.status === 'running',
+                'node-running': step.status === 'running',
+              },
+            ]"
             :title="step.label"
           >
-            <span class="flow-node-text">{{ step.label }}</span>
+            <span class="flow-node-text">
+              <i class="flow-icon" :class="phaseIconClass(step.cls)" aria-hidden="true" />
+              {{ step.label }}
+              <i
+                v-if="step.cls === 'tool' && toolStatusIconClass(step.status)"
+                class="flow-status-icon"
+                :class="toolStatusIconClass(step.status)!"
+                aria-hidden="true"
+              />
+            </span>
           </div>
-        </template>
+        </div>
       </template>
       <span v-else-if="active" class="flow-wait">等待执行…</span>
-      <template v-if="done">
-        <span v-if="doneSteps.length" class="flow-arrow" aria-hidden="true">→</span>
-        <div class="flow-node node-end">✅ 完成</div>
-      </template>
+      <div v-if="done" class="flow-step-group">
+        <span v-if="flowSteps.length" class="flow-arrow" aria-hidden="true">→</span>
+        <div class="flow-node node-end">
+          <i :class="flowEndIconClass()" class="flow-icon" aria-hidden="true" />
+          完成
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -59,17 +90,8 @@ const doneSteps = computed(() =>
   margin-bottom: 10px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   padding: 8px 10px;
-}
-
-.flow-strip.active {
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg-2));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
-}
-
-.flow-strip.embedded.active {
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg-2));
 }
 
 .flow-strip.embedded.done {
@@ -87,15 +109,25 @@ const doneSteps = computed(() =>
 
 .flow-label {
   margin-bottom: 6px;
+  text-align: left;
 }
 
 .flow-strip-track {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   align-content: flex-start;
-  gap: 6px 4px;
+  justify-content: flex-start;
+  gap: 6px;
   padding: 2px 0;
+}
+
+.flow-step-group {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  max-width: 100%;
 }
 
 .flow-wait {
@@ -105,13 +137,22 @@ const doneSteps = computed(() =>
 
 .flow-node {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
   max-width: 152px;
+  min-height: 28px;
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: 0;
   font-size: 11px;
   border: 1.5px solid transparent;
   overflow: hidden;
   animation: flow-node-in 0.35s ease-out both;
+  text-align: left;
+}
+
+.flow-node.node-running {
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent);
 }
 
 .flow-node-text {
@@ -123,6 +164,20 @@ const doneSteps = computed(() =>
   line-height: 1.45;
   word-break: break-word;
   overflow-wrap: anywhere;
+  text-align: left;
+  width: 100%;
+}
+
+.flow-icon {
+  margin-right: 0.35em;
+  opacity: 0.92;
+  font-size: 0.95em;
+}
+
+.flow-status-icon {
+  margin-left: 0.25em;
+  font-size: 0.85em;
+  opacity: 0.9;
 }
 
 .flow-strip.done .flow-node {
@@ -135,42 +190,15 @@ const doneSteps = computed(() =>
 
 .flow-arrow {
   flex-shrink: 0;
-  align-self: center;
-  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 28px;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   user-select: none;
-}
-
-.node-think {
-  background: #7c3aed;
-  color: #fff;
-  border-color: #a78bfa;
-}
-
-.node-tool {
-  background: #d97706;
-  color: #fff;
-  border-color: #fbbf24;
-}
-
-.node-tool-err {
-  background: #dc2626;
-  color: #fff;
-  border-color: #f87171;
-}
-
-.node-output {
-  background: #059669;
-  color: #fff;
-  border-color: #34d399;
-}
-
-.node-end {
-  background: #0891b2;
-  color: #fff;
-  border-color: #22d3ee;
 }
 
 @keyframes flow-node-in {
@@ -187,10 +215,10 @@ const doneSteps = computed(() =>
 @keyframes flow-node-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--phase-think) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--phase-think) 35%, transparent);
   }
 }
 </style>
