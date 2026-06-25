@@ -48,12 +48,14 @@ function isNodeNew(step: FlowStepView) {
                 <div
                   class="flow-node"
                   :class="[
+                    `phase-${step.cls}`,
                     flowNodeClass(step.cls, step.subOk),
                     mermaidShapeClass(step.mermaidShape),
                     {
                       'shape-dashed': step.shapeDashed,
                       'node-new': isNodeNew(step),
                       'node-running': step.status === 'running',
+                      'node-done': step.status === 'done',
                     },
                   ]"
                   :title="step.label"
@@ -83,12 +85,14 @@ function isNodeNew(step: FlowStepView) {
             <div
               class="flow-node"
               :class="[
+                `phase-${segment.step.cls}`,
                 flowNodeClass(segment.step.cls, segment.step.subOk),
                 mermaidShapeClass(segment.step.mermaidShape),
                 {
                   'shape-dashed': segment.step.shapeDashed,
                   'node-new': isNodeNew(segment.step),
                   'node-running': segment.step.status === 'running',
+                  'node-done': segment.step.status === 'done',
                 },
               ]"
               :title="segment.step.label"
@@ -116,7 +120,7 @@ function isNodeNew(step: FlowStepView) {
       <span v-else-if="active" class="flow-wait">等待执行…</span>
       <div v-if="done" class="flow-step-group">
         <span v-if="flowSegments.length" class="flow-arrow" aria-hidden="true">→</span>
-        <div class="flow-node node-step shape-stadium">
+        <div class="flow-node phase-step node-step shape-stadium node-done">
           <span class="flow-node-compact">
             <span class="compact-line">{{ endCompactLines[0] }}</span>
             <span class="compact-line">{{ endCompactLines[1] }}</span>
@@ -193,16 +197,11 @@ function isNodeNew(step: FlowStepView) {
   min-height: 28px;
   padding: 6px 10px;
   border: 1.5px solid var(--border);
-  color: var(--text);
   overflow: hidden;
   animation: flow-node-in 0.35s ease-out both;
   text-align: center;
   font-size: 11px;
   position: relative;
-}
-
-.flow-node.node-running {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--phase-fg, var(--accent)) 45%, transparent);
 }
 
 .flow-node-inner {
@@ -245,14 +244,12 @@ function isNodeNew(step: FlowStepView) {
 
 .flow-icon {
   margin-right: 0.35em;
-  opacity: 0.92;
   font-size: 0.95em;
 }
 
 .flow-status-icon {
   margin-left: 0.25em;
   font-size: 0.85em;
-  opacity: 0.9;
 }
 
 .flow-strip.done .flow-node {

@@ -125,83 +125,60 @@
   color: var(--phase-error-muted);
 }
 
-/* Flow strip — 高饱和亮色节点 */
-.flow-node[class*='node-'] {
+/* Flow strip — 背景与 activity-type-tag 同透明度，文字色与标签前景一致 */
+.flow-node[class*='phase-'] {
+  --flow-node-fill: var(--phase-bg);
+  background: var(--phase-bg);
+  border-color: var(--phase-border);
+  color: var(--phase-fg);
   border-width: 2px;
   font-weight: 600;
 }
 
-.flow-node.node-tool,
-.flow-node.node-tool-err {
-  --flow-node-fill: color-mix(in srgb, var(--phase-tool) 42%, var(--bg));
-  --phase-fg: var(--phase-tool);
-  background: var(--flow-node-fill);
-  color: var(--phase-tool);
-  border-color: var(--phase-tool);
+.flow-node[class*='phase-'] .flow-icon {
+  color: var(--phase-fg);
+}
+
+.flow-node[class*='phase-'] .flow-status-icon {
+  color: var(--phase-fg-muted);
+}
+
+.flow-node[class*='phase-'] .compact-line {
+  color: var(--phase-fg);
+}
+
+.flow-node[class*='phase-'].node-done .flow-icon,
+.flow-node[class*='phase-'].node-done .flow-status-icon,
+.flow-node[class*='phase-'].node-done .flow-node-text,
+.flow-node[class*='phase-'].node-done .compact-line {
+  color: var(--phase-fg-muted);
+}
+
+.flow-node[class*='phase-'].node-running .flow-node-text {
+  color: var(--phase-fg);
 }
 
 .flow-node.node-tool-err {
-  --flow-node-fill: color-mix(in srgb, var(--phase-error) 38%, var(--bg));
-  --phase-fg: var(--phase-error);
+  --flow-node-fill: color-mix(in srgb, var(--phase-error) 10%, transparent);
   background: var(--flow-node-fill);
+  border-color: color-mix(in srgb, var(--phase-error) 22%, transparent);
   color: var(--phase-error);
-  border-color: var(--phase-error);
 }
 
-.flow-node.node-think {
-  --flow-node-fill: color-mix(in srgb, var(--phase-think) 42%, var(--bg));
-  --phase-fg: var(--phase-think);
-  background: var(--flow-node-fill);
-  color: var(--phase-think);
-  border-color: var(--phase-think);
+.flow-node.node-tool-err .flow-icon,
+.flow-node.node-tool-err .flow-status-icon,
+.flow-node.node-tool-err .flow-node-text {
+  color: var(--phase-error);
 }
 
-.flow-node.node-output {
-  --flow-node-fill: color-mix(in srgb, var(--phase-output) 42%, var(--bg));
-  --phase-fg: var(--phase-output);
-  background: var(--flow-node-fill);
-  color: var(--phase-output);
-  border-color: var(--phase-output);
+.flow-node[class*='phase-'].shape-rhombus,
+.flow-node[class*='phase-'].shape-hexagon {
+  color: var(--phase-fg);
 }
 
-.flow-node.node-file {
-  --flow-node-fill: color-mix(in srgb, var(--phase-file) 42%, var(--bg));
-  --phase-fg: var(--phase-file);
-  background: var(--flow-node-fill);
-  color: var(--phase-file);
-  border-color: var(--phase-file);
-}
-
-.flow-node.node-delegate {
-  --flow-node-fill: color-mix(in srgb, var(--phase-delegate) 42%, var(--bg));
-  --phase-fg: var(--phase-delegate);
-  background: var(--flow-node-fill);
-  color: var(--phase-delegate);
-  border-color: var(--phase-delegate);
-}
-
-.flow-node.node-system {
-  --flow-node-fill: color-mix(in srgb, var(--phase-system) 40%, var(--bg));
-  --phase-fg: var(--phase-system);
-  background: var(--flow-node-fill);
-  color: var(--phase-system);
-  border-color: var(--phase-system);
-}
-
-.flow-node.node-system.shape-rhombus {
-  color: var(--phase-system);
-}
-
-.flow-node.node-step {
-  --flow-node-fill: color-mix(in srgb, var(--phase-step) 42%, var(--bg));
-  --phase-fg: var(--phase-step);
-  background: var(--flow-node-fill);
-  color: var(--phase-step);
-  border-color: var(--phase-step);
-}
-
-.flow-node.node-step.shape-stadium {
-  color: var(--phase-step);
+.flow-node[class*='phase-'].shape-rhombus.node-done,
+.flow-node[class*='phase-'].shape-hexagon.node-done {
+  color: var(--phase-fg-muted);
 }
 
 .flow-strip.active {

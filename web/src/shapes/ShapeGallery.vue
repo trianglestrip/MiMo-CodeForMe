@@ -54,7 +54,7 @@ const currentMapping = [
         <article v-for="shape in ALL_MERMAID_SHAPES" :key="shape" class="shape-card">
           <div class="shape-preview">
             <div
-              class="flow-node node-tool"
+              class="flow-node phase-tool"
               :class="mermaidShapeClass(shape)"
             >
               <span v-if="shape === 'stadium' || shape === 'rhombus' || shape === 'circle' || shape === 'hexagon'" class="flow-node-compact">
@@ -80,6 +80,7 @@ const currentMapping = [
           <div
             class="flow-node"
             :class="[
+              `phase-${sample.phase}`,
               flowNodeClass(sample.phase),
               sample.phase === 'tool' ? mermaidShapeClass('subroutine') : '',
               sample.phase === 'file' ? mermaidShapeClass('rounded') : '',

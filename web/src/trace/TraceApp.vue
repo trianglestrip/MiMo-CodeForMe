@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import type { ScrollbarInstance } from 'element-plus'
 import { PRODUCT_NAME } from '@/lib/brand'
 import AppHeader from '@/components/AppHeader.vue'
-import PageNavTabs from '@/components/PageNavTabs.vue'
 import ServiceStatus from '@/components/ServiceStatus.vue'
 import WorkDirSelector from '@/components/WorkDirSelector.vue'
 import QuestionNavFab from '@/components/QuestionNavFab.vue'
@@ -38,18 +37,7 @@ const questionNavItems = computed(() =>
 <template>
   <ElContainer direction="vertical" class="trace-page shell-vertical">
     <AppHeader>
-      <template #breadcrumb>
-        <ElBreadcrumbItem>
-          <a href="/">{{ PRODUCT_NAME }}</a>
-        </ElBreadcrumbItem>
-        <ElBreadcrumbItem>
-          <a href="/trace.html">Trace</a>
-        </ElBreadcrumbItem>
-        <ElBreadcrumbItem>{{ pageTitle }}</ElBreadcrumbItem>
-      </template>
-      <template #nav>
-        <PageNavTabs active="trace" />
-      </template>
+      <template #title>{{ pageTitle }}</template>
       <template #actions>
         <WorkDirSelector />
         <ServiceStatus />

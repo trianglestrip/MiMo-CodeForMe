@@ -1,8 +1,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { getWorkDir, WORK_DIR_CHANGED } from '@/lib/workDir'
 import { subscribeMimoEvents } from '@/lib/mimo/eventStream'
-import { latestSessionIdFromMap } from '@/lib/sessionMap'
-import { SESSION_MAP_KEY } from './constants'
+import { latestSessionIdFromMap, SESSION_MAP_KEY, SESSION_MAP_CHANGED } from '@/lib/sessionMap'
 import { createTraceEngine } from './traceEngine'
 import { sessionPageUrl } from './utils'
 import { useAsyncTraceSidebar } from '@/composables/trace/useAsyncTraceSidebar'
@@ -75,6 +74,7 @@ export function useTracePage() {
     await timeline.loadSession(sid)
 
     window.addEventListener('storage', onStorage)
+    window.addEventListener(SESSION_MAP_CHANGED, onSessionMapChanged)
     window.addEventListener('popstate', onPopState)
     window.addEventListener(WORK_DIR_CHANGED, onWorkDirChanged)
     storageTimer = setInterval(() => {
@@ -90,19 +90,30 @@ export function useTracePage() {
     }
   })
 
+  function applySessionMap(map: Record<string, { sessionId?: string; title?: string; updatedAt?: number; createdAt?: number }>) {
+    engine.syncFromStorageMap(map)
+    const urlSid = new URLSearchParams(location.search).get('session')
+    if (urlSid) {
+      if (urlSid !== engine.activeSessionID.value) void navigateToSession(urlSid)
+      return
+    }
+    if (!engine.activeSessionID.value) {
+      const latest = latestSessionIdFromMap(map)
+      if (latest) void navigateToSession(latest)
+    }
+  }
+
   function onStorage(e: StorageEvent) {
     if (e.key !== SESSION_MAP_KEY || !e.newValue) return
     try {
-      const map = JSON.parse(e.newValue) as Record<
-        string,
-        { sessionId?: string; title?: string; updatedAt?: number; createdAt?: number }
-      >
-      engine.syncFromStorageMap(map)
-      const latest = latestSessionIdFromMap(map)
-      if (!engine.activeSessionID.value && latest) void navigateToSession(latest)
+      applySessionMap(JSON.parse(e.newValue))
     } catch {
       // ignore
     }
+  }
+
+  function onSessionMapChanged() {
+    void sidebar.refresh().then(applySessionMap)
   }
 
   function onPopState() {
@@ -114,6 +125,7 @@ export function useTracePage() {
     streamAbort?.abort()
     if (storageTimer) clearInterval(storageTimer)
     window.removeEventListener('storage', onStorage)
+    window.removeEventListener(SESSION_MAP_CHANGED, onSessionMapChanged)
     window.removeEventListener('popstate', onPopState)
     window.removeEventListener(WORK_DIR_CHANGED, onWorkDirChanged)
   })

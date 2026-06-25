@@ -56,8 +56,10 @@ export function createTraceEngine(getWorkDir: () => string) {
     return rt
   }
 
-  function isActiveSession(sessionID: string) {
-    return sessionID === activeSessionID.value
+  let replayingSessionId: string | null = null
+
+  function canMutateTimeline(sessionID: string) {
+    return sessionID === activeSessionID.value || sessionID === replayingSessionId
   }
 
   function touchSession(ses: TraceSession) {
@@ -132,7 +134,7 @@ export function createTraceEngine(getWorkDir: () => string) {
       subOk?: boolean
     } = {},
   ) {
-    if (!isActiveSession(ses.id)) return
+    if (!canMutateTimeline(ses.id)) return
     const turn = ensureTurn(ses)
     const rt = runtime(ses)
     let step = rt.stepIndex.get(key)
@@ -205,7 +207,7 @@ export function createTraceEngine(getWorkDir: () => string) {
   }
 
   function handleDelta(ses: TraceSession, props: Record<string, unknown>) {
-    if (!isActiveSession(ses.id)) return
+    if (!canMutateTimeline(ses.id)) return
     const partID = props.partID
     const delta = props.delta
     if (typeof partID !== 'string' || delta == null) return
@@ -223,7 +225,7 @@ export function createTraceEngine(getWorkDir: () => string) {
   }
 
   function handleGenericPart(ses: TraceSession, part: Record<string, unknown>) {
-    if (!isActiveSession(ses.id)) return
+    if (!canMutateTimeline(ses.id)) return
     touchSession(ses)
     const mapped = traceStepFromPart(part)
     if (!mapped) return
@@ -238,7 +240,7 @@ export function createTraceEngine(getWorkDir: () => string) {
   }
 
   function handleTool(ses: TraceSession, part: Record<string, unknown>) {
-    if (!isActiveSession(ses.id)) return
+    if (!canMutateTimeline(ses.id)) return
     touchSession(ses)
     const callID = part.callID || part.id
     if (!callID) return
@@ -266,7 +268,7 @@ export function createTraceEngine(getWorkDir: () => string) {
       ses.title = q.length > 36 ? `${q.slice(0, 36)}…` : q
     }
     touchSession(ses)
-    if (!isActiveSession(ses.id)) return
+    if (!canMutateTimeline(ses.id)) return
     finishTurn(ses)
     startTurn(ses, q)
   }
@@ -314,7 +316,7 @@ export function createTraceEngine(getWorkDir: () => string) {
     if (type === 'session.error') {
       const sid = raw.properties?.sessionID
       const ses = getSession(sid ? String(sid) : null)
-      if (!isActiveSession(ses.id)) return
+      if (!canMutateTimeline(ses.id)) return
       upsertStep(ses, `err:${Date.now()}`, 'system', phaseTag('system'), String(raw.properties?.error || 'session error'), {
         done: true,
         subOk: false,
@@ -327,7 +329,7 @@ export function createTraceEngine(getWorkDir: () => string) {
       const sid = raw.properties?.sessionID
       const st =
         (raw.properties?.status as { type?: string })?.type || (raw.properties?.type as string)
-      if (st === 'idle' && sid && isActiveSession(String(sid))) finishTurn(getSession(String(sid)))
+      if (st === 'idle' && sid && canMutateTimeline(String(sid))) finishTurn(getSession(String(sid)))
       return
     }
 
@@ -360,31 +362,46 @@ export function createTraceEngine(getWorkDir: () => string) {
     }
   }
 
+  function extractMessageUserText(msg: SessionMessage): string {
+    for (const p of msg.parts ?? []) {
+      if (p?.type === 'text' && typeof p.text === 'string' && p.text.trim()) return p.text.trim()
+    }
+    const info = msg.info as Record<string, unknown> | undefined
+    if (typeof info?.content === 'string' && info.content.trim()) return info.content.trim()
+    if (typeof info?.text === 'string' && info.text.trim()) return info.text.trim()
+    return ''
+  }
+
   function replaySessionMessages(sessionID: string, messages: SessionMessage[]) {
     const ses = getSession(sessionID)
-    for (const msg of messages) {
-      const role = msg.info?.role
-      if (role === 'user') {
-        finishTurn(ses)
-        const text = (msg.parts ?? []).find((p) => p.type === 'text' && p.text)?.text?.trim()
-        if (!text) continue
-        if (!ses.title || ses.title === '新对话') {
-          ses.title = text.length > 36 ? `${text.slice(0, 36)}…` : text
+    replayingSessionId = sessionID
+    try {
+      for (const msg of messages) {
+        const role = msg.info?.role
+        if (msg.info?.id && role) runtime(ses).messageRoles.set(msg.info.id, role)
+        if (role === 'user') {
+          finishTurn(ses)
+          const text = extractMessageUserText(msg)
+          if (!text) continue
+          if (!ses.title || ses.title === '新对话') {
+            ses.title = text.length > 36 ? `${text.slice(0, 36)}…` : text
+          }
+          startTurn(ses, text)
+          if (msg.info?.id) runtime(ses).userMessages.add(msg.info.id)
         }
-        startTurn(ses, text)
-        if (msg.info?.id) runtime(ses).userMessages.add(msg.info.id)
-      }
-      if (role === 'assistant') {
-        if (msg.info?.id) runtime(ses).messageRoles.set(msg.info.id, 'assistant')
-        if (!runtime(ses).currentTurn) startTurn(ses, '（历史回放）')
-        for (const part of msg.parts ?? []) {
-          if (part.type === 'tool') handleTool(ses, part as Record<string, unknown>)
-          else handleGenericPart(ses, { ...part, time: part.time ?? { end: Date.now() } })
+        if (role === 'assistant') {
+          if (!runtime(ses).currentTurn) startTurn(ses, '（历史回放）')
+          for (const part of msg.parts ?? []) {
+            if (part.type === 'tool') handleTool(ses, part as Record<string, unknown>)
+            else handleGenericPart(ses, { ...part, time: part.time ?? { end: Date.now() } })
+          }
+          finishTurn(ses)
         }
-        finishTurn(ses)
       }
+      ses.loaded = true
+    } finally {
+      replayingSessionId = null
     }
-    ses.loaded = true
   }
 
   function syncFromStorageMap(map: Record<string, { sessionId?: string; title?: string; updatedAt?: number; createdAt?: number }>) {

@@ -8,14 +8,14 @@ import { PRODUCT_NAME, modelDisplayName } from '@/lib/brand'
 import { TURN_ENGINE_KEY } from '@/composables/turn/useTurnEngine'
 import MessageBubble from '@/components/MessageBubble.vue'
 import AppHeader from '@/components/AppHeader.vue'
-import PageNavTabs from '@/components/PageNavTabs.vue'
+import TraceOpenButton from '@/components/TraceOpenButton.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 import WorkDirSelector from '@/components/WorkDirSelector.vue'
 import ServiceStatus from '@/components/ServiceStatus.vue'
 import QuestionNavFab from '@/components/QuestionNavFab.vue'
 import ErrorBar from '@/components/ErrorBar.vue'
 import ChatComposer from '@/components/composer/ChatComposer.vue'
-import { loadSessionMapAsync } from '@/lib/sessionMap'
+import { loadSessionMapAsync, SESSION_MAP_KEY, SESSION_MAP_CHANGED } from '@/lib/sessionMap'
 import MessageAreaSkeleton from '@/components/skeleton/MessageAreaSkeleton.vue'
 import { useAsyncMessageList } from '@/composables/chat/useAsyncMessageList'
 
@@ -88,11 +88,19 @@ function updateScrollTop() {
 
 onMounted(() => {
   messagesEl.value?.wrapRef?.addEventListener('scroll', updateScrollTop)
+  window.addEventListener(SESSION_MAP_CHANGED, refreshTraceHref)
+  window.addEventListener('storage', onStorageForTraceHref)
 })
 
 onUnmounted(() => {
   messagesEl.value?.wrapRef?.removeEventListener('scroll', updateScrollTop)
+  window.removeEventListener(SESSION_MAP_CHANGED, refreshTraceHref)
+  window.removeEventListener('storage', onStorageForTraceHref)
 })
+
+function onStorageForTraceHref(e: StorageEvent) {
+  if (e.key === SESSION_MAP_KEY) void refreshTraceHref()
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -127,12 +135,10 @@ watch(() => chat.activeId, scrollToBottom)
         </ElBreadcrumbItem>
         <ElBreadcrumbItem>{{ headerTitle }}</ElBreadcrumbItem>
       </template>
-      <template #nav>
-        <PageNavTabs active="chat" :trace-href="traceHref" />
-      </template>
       <template #actions>
         <WorkDirSelector />
         <ServiceStatus />
+        <TraceOpenButton :href="traceHref" />
         <ModelSelector />
       </template>
     </AppHeader>

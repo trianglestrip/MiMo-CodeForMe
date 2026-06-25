@@ -12,7 +12,14 @@ defineProps<{
   <ElAlert type="warning" show-icon :closable="false" class="incomplete-notice">
     <template #title>
       <span>{{ stopReasonMessage(reason) }}</span>
-      <ElLink v-if="traceHref" :href="traceHref" type="primary" class="trace-link">Trace</ElLink>
+      <ElLink
+        v-if="traceHref"
+        :href="traceHref"
+        target="_blank"
+        rel="noopener noreferrer"
+        type="primary"
+        class="trace-link"
+      >Trace</ElLink>
     </template>
   </ElAlert>
 </template>

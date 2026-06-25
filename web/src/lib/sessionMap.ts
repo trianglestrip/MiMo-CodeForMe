@@ -1,6 +1,7 @@
 import { readJsonAsync, scheduleWriteJson } from '@/lib/asyncLocalStorage'
 
 export const SESSION_MAP_KEY = 'mimo-web-session-map'
+export const SESSION_MAP_CHANGED = 'mimo-session-map-changed'
 
 export type SessionMapEntry = {
   sessionId: string
@@ -37,4 +38,7 @@ export async function persistSessionLinkAsync(
     createdAt: prev?.createdAt ?? Date.now(),
   }
   await scheduleWriteJson(SESSION_MAP_KEY, map)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_MAP_CHANGED))
+  }
 }

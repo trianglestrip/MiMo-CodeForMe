@@ -43,23 +43,22 @@ export function useAsyncTraceTimeline(engine: TraceEngine) {
 
     try {
       const messages = (await fetchSessionMessages(sessionID, directory)) as SessionMessage[]
-      if (ses.timeline.length) {
+      if (!ses.timeline.length) {
+        if (Array.isArray(messages) && messages.length) {
+          engine.replaySessionMessages(sessionID, messages)
+          hint.value = ''
+        } else {
+          hint.value = '该对话暂无消息，发送后将在此显示'
+          ses.loaded = true
+        }
+      } else {
         hint.value = ''
-        ready.value = true
-        return
       }
-      if (Array.isArray(messages) && messages.length) {
-        engine.replaySessionMessages(sessionID, messages)
-        hint.value = ''
-        return
-      }
-      hint.value = '该对话暂无消息，发送后将在此显示'
-      ses.loaded = true
     } catch {
       hint.value = '无法加载该对话'
+    } finally {
+      ready.value = true
     }
-
-    ready.value = true
   }
 
   return { ready, hint, loadSession }
