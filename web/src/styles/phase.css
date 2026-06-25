@@ -50,7 +50,60 @@
   --phase-border: var(--phase-system-border);
 }
 
-/* Activity list */
+/* Activity list — type tag + plain label */
+.activity-item[class*='phase-'] .activity-chip {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.activity-item[class*='phase-'] .activity-type-tag {
+  background: var(--phase-bg);
+  color: var(--phase-fg);
+}
+
+.activity-item[class*='phase-'].is-active .activity-type-tag {
+  box-shadow: inset 0 0 0 1px var(--phase-border);
+}
+
+.activity-item[class*='phase-'].is-active .activity-label {
+  color: var(--text);
+}
+
+.activity-item[class*='phase-'].is-active .activity-phase-icon {
+  color: var(--phase-fg);
+}
+
+.activity-item[class*='phase-'].is-done:not(.is-active) .activity-type-tag {
+  color: var(--phase-fg-muted);
+}
+
+.activity-item[class*='phase-'].is-done:not(.is-active) .activity-label {
+  color: var(--text-3);
+}
+
+.activity-item[class*='phase-'].is-done:not(.is-active) .activity-phase-icon {
+  color: var(--phase-fg-muted);
+}
+
+.activity-item.is-error .activity-type-tag {
+  background: color-mix(in srgb, var(--phase-error) 10%, transparent);
+  color: var(--phase-error);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--phase-error) 22%, transparent);
+}
+
+.activity-item.is-error .activity-label {
+  color: var(--phase-error-muted);
+}
+
+.activity-item.is-error .activity-phase-icon,
+.activity-item.is-error .activity-status-icon {
+  color: var(--phase-error);
+}
+
+.activity-item[class*='phase-'] .activity-status-icon {
+  color: var(--phase-fg-muted);
+}
+
 .activity-line[class*='phase-'] .activity-dot {
   background: var(--phase-fg-muted);
 }
@@ -72,59 +125,85 @@
   color: var(--phase-error-muted);
 }
 
-/* Flow strip nodes */
-.flow-node.node-think {
-  background: var(--phase-think);
-  color: #fff;
-  border-color: var(--phase-think-muted);
+/* Flow strip — Mermaid 外形配色 */
+.flow-node.shape-rect.node-tool,
+.flow-node.shape-rect.node-tool-err {
+  --phase-fg: var(--phase-tool);
+  background: var(--bg);
+  color: var(--phase-tool);
+  border-color: var(--phase-tool);
 }
 
-.flow-node.node-tool {
-  background: var(--phase-tool);
-  color: #fff;
-  border-color: var(--phase-tool-muted);
+.flow-node.shape-rect.node-tool-err {
+  --phase-fg: var(--phase-error);
+  color: var(--phase-error);
+  border-color: var(--phase-error);
 }
 
-.flow-node.node-tool-err {
-  background: var(--phase-error);
-  color: #fff;
-  border-color: var(--phase-error-muted);
+.flow-node.shape-rounded.node-think {
+  --phase-fg: var(--phase-think);
+  background: var(--bg);
+  color: var(--phase-think);
+  border-color: var(--phase-think);
 }
 
-.flow-node.node-output {
-  background: var(--phase-output);
-  color: #fff;
-  border-color: var(--phase-output-muted);
+.flow-node.shape-rounded.node-system {
+  --phase-fg: var(--phase-system);
+  background: var(--bg);
+  color: var(--phase-system);
+  border-color: var(--phase-system);
 }
 
-.flow-node.node-step {
-  background: var(--phase-step);
-  color: #fff;
-  border-color: var(--phase-step-muted);
+.flow-node.shape-parallelogram.node-output {
+  --phase-fg: var(--phase-output);
+  background: var(--bg);
+  color: var(--phase-output);
+  border-color: var(--phase-output);
 }
 
-.flow-node.node-file {
-  background: var(--phase-file);
-  color: #fff;
-  border-color: var(--phase-file-muted);
+.flow-node.shape-cylinder.node-file,
+.flow-node.shape-asymmetric.node-file,
+.flow-node.shape-trapezoid.node-file,
+.flow-node.shape-trapezoid-alt.node-file {
+  --phase-fg: var(--phase-file);
+  background: var(--bg);
+  color: var(--phase-file);
+  border-color: var(--phase-file);
 }
 
-.flow-node.node-delegate {
-  background: var(--phase-delegate);
-  color: #fff;
-  border-color: var(--phase-delegate-muted);
+.flow-node.shape-parallelogram-alt.node-delegate {
+  --phase-fg: var(--phase-delegate);
+  background: var(--bg);
+  color: var(--phase-delegate);
+  border-color: var(--phase-delegate);
 }
 
-.flow-node.node-system {
-  background: var(--phase-system);
-  color: #fff;
-  border-color: var(--phase-system-muted);
+.flow-node.shape-subroutine.node-delegate {
+  --phase-fg: var(--phase-delegate);
+  background: var(--bg);
+  color: var(--phase-delegate);
+  border-color: var(--phase-delegate);
 }
 
-.flow-node.node-end {
-  background: var(--phase-end);
-  color: #fff;
-  border-color: var(--phase-end-muted);
+.flow-node.shape-rhombus.node-system,
+.flow-node.shape-hexagon.node-system,
+.flow-node.shape-circle.node-system {
+  --phase-fg: var(--phase-system);
+  color: var(--phase-system);
+}
+
+.flow-node.shape-stadium.node-step {
+  --phase-fg: var(--phase-step);
+  background: var(--bg);
+  color: var(--phase-step);
+  border-color: var(--phase-step);
+}
+
+.flow-node.shape-stadium.node-end {
+  --phase-fg: var(--phase-end);
+  background: var(--bg);
+  color: var(--phase-end);
+  border-color: var(--phase-end);
 }
 
 .flow-strip.active {
@@ -139,6 +218,30 @@
 /* Reasoning / think content block */
 .reasoning-block {
   border-color: var(--phase-border);
+}
+
+.reasoning-block .el-collapse-item__header {
+  background: var(--phase-bg);
+  color: var(--phase-fg);
+  border: 1px solid var(--phase-border);
+  border-radius: var(--radius-sm);
+  min-height: 28px;
+  line-height: 1.4;
+}
+
+.reasoning-block .el-collapse-item__wrap {
+  border: 1px solid var(--phase-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  overflow: hidden;
+}
+
+.reasoning-block .el-collapse-item__header:hover {
+  color: var(--phase-fg-muted);
+}
+
+.reasoning-block .reasoning-tag-icon {
+  color: var(--phase-fg);
 }
 
 .reasoning-toggle {

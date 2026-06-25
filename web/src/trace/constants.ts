@@ -1,4 +1,4 @@
-export const SESSION_MAP_KEY = 'mimo-web-session-map'
+export { SESSION_MAP_KEY } from '@/lib/sessionMap'
 
 export const SKIP_EVENT_TYPES = new Set([
   'server.heartbeat',

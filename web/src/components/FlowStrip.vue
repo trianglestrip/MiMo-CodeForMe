@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import { activityFlowLabel } from '@/lib/flowLabels'
 import { flowNodeClass } from '@/lib/partPhase'
-import { phaseIconClass, toolStatusIconClass, flowEndIconClass } from '@/lib/phaseIcons'
+import { flowMermaidShape, mermaidShapeClass, isCompactMermaidShape } from '@/lib/mermaidShapes'
+import { flowCompactLines } from '@/lib/flowCompactLabels'
+import { phaseIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
 import type { ActivityStep } from '@/stores/chat'
 
 const props = defineProps<{
@@ -21,14 +23,24 @@ const flowSteps = computed(() =>
         a.status === 'error' ||
         (props.active && a.status === 'running'),
     )
-    .map((a) => ({
-      key: a.key,
-      cls: a.phase,
-      label: activityFlowLabel(a.phase, a.label, a.status),
-      status: a.status,
-      subOk: a.phase === 'tool' ? a.status !== 'error' : undefined,
-    })),
+    .map((a) => {
+      const mermaidShape = flowMermaidShape(a.phase, a.key, a.label)
+      return {
+        key: a.key,
+        cls: a.phase,
+        label: activityFlowLabel(a.phase, a.label, a.status),
+        status: a.status,
+        subOk: a.phase === 'tool' ? a.status !== 'error' : undefined,
+        mermaidShape,
+        compactLines: isCompactMermaidShape(mermaidShape)
+          ? flowCompactLines(mermaidShape, a.key, a.label)
+          : null,
+        shapeDashed: a.phase === 'system' && mermaidShape === 'rounded',
+      }
+    }),
 )
+
+const endCompactLines: [string, string] = ['流程', '完成']
 </script>
 
 <template>
@@ -46,22 +58,30 @@ const flowSteps = computed(() =>
             class="flow-node"
             :class="[
               flowNodeClass(step.cls, step.subOk),
+              mermaidShapeClass(step.mermaidShape),
               {
+                'shape-dashed': step.shapeDashed,
                 'node-new': index === flowSteps.length - 1 && active && step.status === 'running',
                 'node-running': step.status === 'running',
               },
             ]"
             :title="step.label"
           >
-            <span class="flow-node-text">
-              <i class="flow-icon" :class="phaseIconClass(step.cls)" aria-hidden="true" />
-              {{ step.label }}
-              <i
-                v-if="step.cls === 'tool' && toolStatusIconClass(step.status)"
-                class="flow-status-icon"
-                :class="toolStatusIconClass(step.status)!"
-                aria-hidden="true"
-              />
+            <span v-if="step.compactLines" class="flow-node-compact">
+              <span class="compact-line">{{ step.compactLines[0] }}</span>
+              <span class="compact-line">{{ step.compactLines[1] }}</span>
+            </span>
+            <span v-else class="flow-node-inner">
+              <span class="flow-node-text">
+                <i class="flow-icon" :class="phaseIconClass(step.cls)" aria-hidden="true" />
+                {{ step.label }}
+                <i
+                  v-if="step.cls === 'tool' && toolStatusIconClass(step.status)"
+                  class="flow-status-icon"
+                  :class="toolStatusIconClass(step.status)!"
+                  aria-hidden="true"
+                />
+              </span>
             </span>
           </div>
         </div>
@@ -69,9 +89,11 @@ const flowSteps = computed(() =>
       <span v-else-if="active" class="flow-wait">等待执行…</span>
       <div v-if="done" class="flow-step-group">
         <span v-if="flowSteps.length" class="flow-arrow" aria-hidden="true">→</span>
-        <div class="flow-node node-end">
-          <i :class="flowEndIconClass()" class="flow-icon" aria-hidden="true" />
-          完成
+        <div class="flow-node node-end shape-stadium">
+          <span class="flow-node-compact">
+            <span class="compact-line">{{ endCompactLines[0] }}</span>
+            <span class="compact-line">{{ endCompactLines[1] }}</span>
+          </span>
         </div>
       </div>
     </div>
@@ -90,7 +112,7 @@ const flowSteps = computed(() =>
   margin-bottom: 10px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
 
@@ -118,7 +140,7 @@ const flowSteps = computed(() =>
   align-items: center;
   align-content: flex-start;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 4px 8px;
   padding: 2px 0;
 }
 
@@ -126,7 +148,7 @@ const flowSteps = computed(() =>
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 6px;
+  gap: 4px;
   max-width: 100%;
 }
 
@@ -139,20 +161,27 @@ const flowSteps = computed(() =>
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   max-width: 152px;
   min-height: 28px;
   padding: 6px 10px;
-  border-radius: 0;
-  font-size: 11px;
-  border: 1.5px solid transparent;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
   overflow: hidden;
   animation: flow-node-in 0.35s ease-out both;
-  text-align: left;
+  text-align: center;
+  font-size: 11px;
+  position: relative;
 }
 
 .flow-node.node-running {
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--phase-fg, var(--accent)) 28%, transparent);
+}
+
+.flow-node-inner {
+  display: block;
+  width: 100%;
 }
 
 .flow-node-text {
@@ -166,6 +195,26 @@ const flowSteps = computed(() =>
   overflow-wrap: anywhere;
   text-align: left;
   width: 100%;
+}
+
+.flow-node-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.12;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.compact-line {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
 .flow-icon {
@@ -193,10 +242,10 @@ const flowSteps = computed(() =>
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
+  width: 12px;
   height: 28px;
   color: var(--text-3);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   user-select: none;
 }

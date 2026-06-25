@@ -1,5 +1,5 @@
 @echo off
-REM Web ¾²Ì¬·şÎñ(5173)£¬ÓÉÉÏ¼¶ start.bat µ÷ÓÃ
+REM Web é™æ€æœåŠ¡(5173)ï¼Œç”± start.bat è°ƒç”¨
 cd /d "%~dp0"
 title Web 5173
 node "%~dp0web-server.mjs"

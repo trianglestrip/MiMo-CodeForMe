@@ -27,12 +27,18 @@ export default defineConfig({
       config(_, env) {
         const workDir = process.env.VITE_MIMO_WORK_DIR?.trim() || repoRoot
         const devProxy = env.command === 'serve'
-        writeTraceConfig(devProxy)
+        // 仅 dev 写入 public/；build 在 closeBundle 写入 dist/，避免 build 覆盖 dev 配置
+        if (devProxy) writeTraceConfig(true)
         return {
           define: {
             __DEFAULT_MIMO_WORK_DIR__: JSON.stringify(devProxy ? workDir : ''),
           },
         }
+      },
+      closeBundle() {
+        const out = resolve(__dirname, 'dist/mimo-config.js')
+        fs.mkdirSync(resolve(__dirname, 'dist'), { recursive: true })
+        fs.writeFileSync(out, mimoTraceConfigJs(false))
       },
     },
   ],

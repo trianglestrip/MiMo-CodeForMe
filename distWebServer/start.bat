@@ -5,7 +5,7 @@ cd /d "%~dp0"
 set "ROOT=%CD%"
 
 where node >nul 2>&1 || (echo [ERROR] 未找到 Node.js & pause & exit /b 1)
-if not exist "%ROOT%\server\mimo.exe" (echo [ERROR] 缺少 server\mimo.exe，请先运行 script\build-dist-web-server.bat & pause & exit /b 1)
+if not exist "%ROOT%\server\mimo.exe" (echo [ERROR] 缺少 server\mimo.exe，请先运行 web\build-dist-web-server.bat & pause & exit /b 1)
 
 call "%~dp0stop.bat" /q
 

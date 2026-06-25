@@ -1,4 +1,5 @@
 import { computed, reactive, ref, shallowRef } from 'vue'
+import { latestSessionIdFromMap } from '@/lib/sessionMap'
 import { phaseTag, registerPartKind, resolveDeltaKind, traceStepFromPart } from '@/lib/partPhase'
 import { SKIP_EVENT_TYPES } from './constants'
 import { formatToolDisplay } from './toolDisplay'
@@ -414,20 +415,6 @@ export function createTraceEngine(getWorkDir: () => string) {
     if (changed) sessions.value = [...sessions.value]
   }
 
-  function latestSessionIdFromStorage(): string | null {
-    try {
-      const map = JSON.parse(localStorage.getItem('mimo-web-session-map') || '{}') as Record<
-        string,
-        { sessionId?: string; updatedAt?: number }
-      >
-      const entries = Object.values(map).filter((e) => e?.sessionId)
-      entries.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
-      return entries[0]?.sessionId ?? null
-    } catch {
-      return null
-    }
-  }
-
   async function loadSession(sessionID: string | null) {
     activeSessionID.value = sessionID
     if (!sessionID) return
@@ -559,7 +546,7 @@ export function createTraceEngine(getWorkDir: () => string) {
     handleEvent,
     replaySessionMessages,
     syncFromStorageMap,
-    latestSessionIdFromStorage,
+    latestSessionIdFromMap,
     loadSession,
     navigateToSession,
     setActiveSession,

@@ -1,6 +1,8 @@
 import type { ActivityPhase } from '@/lib/partPhase'
 export type { ActivityPhase } from '@/lib/partPhase'
 export { flowNodeClass } from '@/lib/partPhase'
+export { flowMermaidShape, mermaidShapeClass, isCompactMermaidShape } from '@/lib/mermaidShapes'
+export type { MermaidFlowShape } from '@/lib/mermaidShapes'
 
 export type FlowNodeCls = ActivityPhase
 

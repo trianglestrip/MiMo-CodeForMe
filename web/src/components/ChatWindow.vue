@@ -1,24 +1,43 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, provide } from 'vue'
+import type { ScrollbarInstance } from 'element-plus'
 import { useChatStore } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
 import { useStream } from '@/composables/useStream'
+import { PRODUCT_NAME, modelDisplayName } from '@/lib/brand'
+import { TURN_ENGINE_KEY } from '@/composables/turn/useTurnEngine'
 import MessageBubble from '@/components/MessageBubble.vue'
 import AppHeader from '@/components/AppHeader.vue'
-import NavLinkButton from '@/components/NavLinkButton.vue'
+import PageNavTabs from '@/components/PageNavTabs.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 import WorkDirSelector from '@/components/WorkDirSelector.vue'
 import ServiceStatus from '@/components/ServiceStatus.vue'
 import QuestionNavFab from '@/components/QuestionNavFab.vue'
 import ErrorBar from '@/components/ErrorBar.vue'
-import ChatComposer from '@/components/ChatComposer.vue'
+import ChatComposer from '@/components/composer/ChatComposer.vue'
+import { loadSessionMapAsync } from '@/lib/sessionMap'
+import MessageAreaSkeleton from '@/components/skeleton/MessageAreaSkeleton.vue'
+import { useAsyncMessageList } from '@/composables/chat/useAsyncMessageList'
 
 const chat = useChatStore()
-const { sendMessage } = useStream()
+const { ready: messagesReady, messages, streaming } = useAsyncMessageList()
+const settings = useSettingsStore()
+const { sendMessage, engine } = useStream()
 
-const messagesEl = ref<HTMLDivElement | null>(null)
+const productName = PRODUCT_NAME
+const currentModelLabel = computed(() =>
+  modelDisplayName(settings.currentModel?.name, settings.model),
+)
+const emptyDescription = computed(
+  () => `${productName} 助手 · 当前模型 ${currentModelLabel.value} · 支持工具调用与 Trace`,
+)
+
+provide(TURN_ENGINE_KEY, engine)
+
+const messagesEl = ref<ScrollbarInstance | null>(null)
 const scrollTop = ref(0)
 
-const messages = computed(() => chat.activeConversation()?.messages ?? [])
+const messagesScrollRoot = computed(() => messagesEl.value?.wrapRef ?? null)
 
 const questionNavItems = computed(() =>
   messages.value
@@ -27,25 +46,27 @@ const questionNavItems = computed(() =>
 )
 
 const streamingCursorMessageId = computed(() => {
-  if (!chat.streaming) return null
+  if (!streaming.value) return null
   const last = [...messages.value].reverse().find(m => m.role === 'assistant')
   return last?.id ?? null
 })
 
-const SESSION_MAP_KEY = 'mimo-web-session-map'
+const traceHref = ref('/trace.html')
 
-const traceHref = computed(() => {
+async function refreshTraceHref() {
   const conv = chat.activeConversation()
-  if (!conv) return '/trace.html'
-  try {
-    const raw = localStorage.getItem(SESSION_MAP_KEY)
-    const map = raw ? JSON.parse(raw) as Record<string, { sessionId?: string }> : {}
-    const sid = map[conv.id]?.sessionId
-    return sid ? `/trace.html?session=${encodeURIComponent(sid)}` : '/trace.html'
-  } catch {
-    return '/trace.html'
+  if (!conv) {
+    traceHref.value = '/trace.html'
+    return
   }
-})
+  const map = await loadSessionMapAsync()
+  const sid = map[conv.id]?.sessionId
+  traceHref.value = sid ? `/trace.html?session=${encodeURIComponent(sid)}` : '/trace.html'
+}
+
+watch(() => chat.activeId, () => {
+  void refreshTraceHref()
+}, { immediate: true })
 
 const headerTitle = computed(
   () => currentQuestion.value || chat.activeConversation()?.title || '新对话',
@@ -61,21 +82,24 @@ const currentQuestion = computed(() => {
 })
 
 function updateScrollTop() {
-  if (messagesEl.value) scrollTop.value = messagesEl.value.scrollTop
+  const wrap = messagesEl.value?.wrapRef
+  if (wrap) scrollTop.value = wrap.scrollTop
 }
 
 onMounted(() => {
-  messagesEl.value?.addEventListener('scroll', updateScrollTop)
+  messagesEl.value?.wrapRef?.addEventListener('scroll', updateScrollTop)
 })
 
 onUnmounted(() => {
-  messagesEl.value?.removeEventListener('scroll', updateScrollTop)
+  messagesEl.value?.wrapRef?.removeEventListener('scroll', updateScrollTop)
 })
 
 function scrollToBottom() {
   nextTick(() => {
     requestAnimationFrame(() => {
-      if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+      const wrap = messagesEl.value?.wrapRef
+      if (!wrap) return
+      wrap.scrollTop = wrap.scrollHeight
     })
   })
 }
@@ -85,111 +109,103 @@ const scrollFingerprint = computed(() => {
   const last = msgs[msgs.length - 1]
   if (!last) return ''
   const acts = last.activities?.map((a) => `${a.key}:${a.status}:${a.label.length}`).join('|') ?? ''
-  return `${msgs.length}:${last.content.length}:${last.reasoning?.length ?? 0}:${acts}:${chat.streaming}:${last.completedAt ?? 0}`
+  return `${msgs.length}:${last.content.length}:${last.reasoning?.length ?? 0}:${acts}:${streaming.value}:${last.completedAt ?? 0}`
 })
 
 watch(scrollFingerprint, scrollToBottom)
 watch(() => messages.value.length, scrollToBottom)
-watch(() => chat.streaming, scrollToBottom)
+watch(streaming, scrollToBottom)
 watch(() => chat.activeId, scrollToBottom)
-
-function onSend(text: string, images: string[]) {
-  sendMessage(text, images)
-}
 </script>
 
 <template>
-  <div class="chat-window">
-    <AppHeader title-max-width="300px">
-      <template #title>{{ headerTitle }}</template>
+  <ElContainer direction="vertical" class="chat-window shell-vertical">
+    <AppHeader>
+      <template #breadcrumb>
+        <ElBreadcrumbItem>
+          <a href="/">{{ productName }}</a>
+        </ElBreadcrumbItem>
+        <ElBreadcrumbItem>{{ headerTitle }}</ElBreadcrumbItem>
+      </template>
+      <template #nav>
+        <PageNavTabs active="chat" :trace-href="traceHref" />
+      </template>
       <template #actions>
-        <NavLinkButton :href="traceHref" title="BcAI 调用过程" external>Trace</NavLinkButton>
         <WorkDirSelector />
         <ServiceStatus />
         <ModelSelector />
       </template>
     </AppHeader>
 
-    <div ref="messagesEl" class="messages">
-      <div v-if="messages.length === 0" class="empty-state">
-        <img class="empty-logo" src="/favicon.svg" alt="BcAI" />
-        <h2>BcAI</h2>
-        <p>直连 mimo serve 的 AI 助手，支持工具调用与 Trace 可视化</p>
-        <div class="quick-prompts">
-          <button
-            v-for="p in ['帮我查看当前目录有哪些文件', '介绍一下这个项目', '解释一下 Vue 3 组合式 API']"
-            :key="p"
-            type="button"
-            class="quick-btn"
-            @click="sendMessage(p)"
-          >{{ p }}</button>
-        </div>
-      </div>
+    <ElMain class="shell-main messages-main">
+      <ElScrollbar ref="messagesEl" class="messages">
+        <MessageAreaSkeleton v-if="!messagesReady" />
 
-      <MessageBubble
-        v-for="msg in messages"
-        :key="msg.id"
-        :message="msg"
-        :show-cursor="msg.id === streamingCursorMessageId"
-      />
-    </div>
+        <template v-else>
+          <ElEmpty v-if="messages.length === 0" :description="emptyDescription" :image-size="56">
+            <template #image>
+              <img class="empty-logo" src="/favicon.svg" :alt="productName" />
+            </template>
+            <div class="quick-prompts">
+              <ElButton
+                v-for="p in ['帮我查看当前目录有哪些文件', '介绍一下这个项目', '解释一下 Vue 3 组合式 API']"
+                :key="p"
+                round
+                @click="sendMessage(p)"
+              >{{ p }}</ElButton>
+            </div>
+          </ElEmpty>
 
-    <ErrorBar v-if="chat.error" :message="chat.error" @dismiss="chat.error = null" />
+          <MessageBubble
+            v-for="msg in messages"
+            :key="msg.id"
+            :message="msg"
+            :show-cursor="msg.id === streamingCursorMessageId"
+            :trace-href="traceHref"
+          />
+        </template>
+      </ElScrollbar>
 
-    <div class="chat-bottom">
-      <ChatComposer :disabled="chat.streaming" @send="onSend" />
-    </div>
+      <ErrorBar v-if="chat.error" :message="chat.error" @dismiss="chat.error = null" />
+    </ElMain>
+
+    <ElFooter class="shell-footer chat-footer">
+      <ChatComposer />
+    </ElFooter>
 
     <QuestionNavFab
       :items="questionNavItems"
-      :scroll-root="messagesEl"
-      :offset-bottom="108"
+      :scroll-root="messagesScrollRoot"
+      :offset-bottom="96"
     />
-  </div>
+  </ElContainer>
 </template>
 
 <style scoped>
 .chat-window {
+  height: 100%;
+}
+
+.messages-main {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--bg);
+  position: relative;
 }
 
 .messages {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   padding: 24px 0;
-  position: relative;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.messages :deep(.el-empty) {
   height: 100%;
-  gap: 16px;
-  padding: 40px;
-  text-align: center;
+  min-height: 280px;
+  padding: 40px 20px;
 }
 
 .empty-logo {
   width: 56px;
   height: 56px;
-}
-
-.empty-state h2 {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.empty-state p {
-  color: var(--text-2);
-  max-width: 420px;
 }
 
 .quick-prompts {
@@ -198,26 +214,10 @@ function onSend(text: string, images: string[]) {
   gap: 8px;
   justify-content: center;
   margin-top: 8px;
+  max-width: 520px;
 }
 
-.quick-btn {
-  padding: 8px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  color: var(--text-2);
-  font-size: 13px;
-  background: var(--bg-2);
-  transition: all 0.15s;
-}
-
-.quick-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent-hover);
-  background: var(--accent-dim);
-}
-
-.chat-bottom {
-  flex-shrink: 0;
+.chat-footer {
   border-top: 1px solid var(--border);
   background: var(--bg-2);
 }

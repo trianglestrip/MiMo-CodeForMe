@@ -1,5 +1,6 @@
 import { authHeader, apiUrl, mimoConfig, withDirectory } from './config'
 import { fetchWithTimeout } from './fetch'
+import type { MessageAttachment } from '@/lib/composer/attachments'
 
 export type MimoSession = { id: string; title?: string }
 
@@ -40,7 +41,35 @@ export async function createSession(directory: string): Promise<MimoSession> {
   return res.json() as Promise<MimoSession>
 }
 
-export async function promptAsync(sessionID: string, message: string, directory: string): Promise<void> {
+export type PromptPart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; mime: string; url: string; filename?: string }
+
+export function buildPromptParts(
+  text: string,
+  attachments: Pick<MessageAttachment, 'filename' | 'mime' | 'url'>[] = [],
+): PromptPart[] {
+  const parts: PromptPart[] = []
+  const trimmed = text.trim()
+  if (trimmed) parts.push({ type: 'text', text: trimmed })
+  for (const file of attachments) {
+    parts.push({
+      type: 'file',
+      mime: file.mime,
+      url: file.url,
+      filename: file.filename,
+    })
+  }
+  if (!parts.length) parts.push({ type: 'text', text: '请分析这些附件' })
+  return parts
+}
+
+export async function promptAsync(
+  sessionID: string,
+  message: string,
+  directory: string,
+  attachments: Pick<MessageAttachment, 'filename' | 'mime' | 'url'>[] = [],
+): Promise<void> {
   const res = await fetchWithTimeout(
     withDirectory(`/session/${encodeURIComponent(sessionID)}/prompt_async`, directory),
     {
@@ -49,7 +78,7 @@ export async function promptAsync(sessionID: string, message: string, directory:
         Authorization: authHeader(),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ parts: [{ type: 'text', text: message }] }),
+      body: JSON.stringify({ parts: buildPromptParts(message, attachments) }),
     },
     60_000,
   )
@@ -63,7 +92,13 @@ export function eventUrl(directory: string): string {
 }
 
 export type SessionMessage = {
-  info?: { role?: string; id?: string; tokens?: Record<string, unknown> }
+  info?: {
+    role?: string
+    id?: string
+    finish?: string
+    tokens?: Record<string, unknown>
+    time?: { completed?: number }
+  }
   parts?: Array<{ type?: string; text?: string; id?: string }>
 }
 
@@ -102,42 +137,3 @@ export function lastAssistantText(messages: SessionMessage[]): string {
   return ''
 }
 
-export async function pollAssistantReply(
-  sessionID: string,
-  directory: string,
-  userCountBefore: number,
-  timeoutMs = 90_000,
-  intervalMs = 500,
-): Promise<string> {
-  const deadline = Date.now() + timeoutMs
-  let sawBusy = false
-  let idleSince = 0
-  while (Date.now() < deadline) {
-    const messages = await fetchSessionMessages(sessionID, directory)
-    if (userMessageCount(messages) > userCountBefore) {
-      const text = lastAssistantText(messages)
-      if (text.trim()) return text
-    }
-
-    const statusRes = await fetchWithTimeout(withDirectory('/session/status', directory), {
-      headers: { Authorization: authHeader() },
-    })
-    if (statusRes.ok) {
-      const statuses = (await statusRes.json()) as Record<string, { type?: string }>
-      const st = statuses[sessionID]
-      if (st?.type === 'busy') {
-        sawBusy = true
-        idleSince = 0
-      }
-      if (st?.type === 'idle' || st?.type === 'completed' || (sawBusy && !st)) {
-        idleSince ||= Date.now()
-        if (Date.now() - idleSince > 8_000) {
-          return lastAssistantText(messages).trim()
-        }
-      }
-    }
-
-    await new Promise((r) => setTimeout(r, intervalMs))
-  }
-  return ''
-}

@@ -1,0 +1,2 @@
+# Windows batch scripts: GBK encoding, CRLF (see .cursor/rules/batch-scripts.mdc)
+*.bat text eol=crlf

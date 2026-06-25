@@ -2,6 +2,8 @@
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import FlowStrip from '@/components/FlowStrip.vue'
 import { phaseIconClass, toolStatusIconClass } from '@/lib/phaseIcons'
+import { phaseTag } from '@/lib/partPhase'
+import type { ScrollbarInstance } from 'element-plus'
 import type { ActivityStep } from '@/stores/chat'
 
 const props = defineProps<{
@@ -10,7 +12,7 @@ const props = defineProps<{
   completed?: boolean
 }>()
 
-const listEl = ref<HTMLElement | null>(null)
+const listEl = ref<ScrollbarInstance | null>(null)
 
 const pulseStepId = computed(() => {
   if (!props.showCursor) return null
@@ -24,66 +26,63 @@ const pulseStepId = computed(() => {
 function scrollListToEnd() {
   nextTick(() => {
     requestAnimationFrame(() => {
-      const el = listEl.value
-      if (!el) return
-      el.scrollTop = el.scrollHeight
+      const sb = listEl.value
+      const wrap = sb?.wrapRef
+      if (!sb || !wrap) return
+      const top = Math.max(0, wrap.scrollHeight - wrap.clientHeight)
+      if (typeof sb.setScrollTop === 'function') sb.setScrollTop(top)
+      else wrap.scrollTop = top
     })
   })
 }
 
-watch(
-  () =>
-    props.showCursor
-      ? props.activities.map((a) => `${a.id}:${a.status}:${a.label.length}`).join('|')
-      : null,
-  (v) => {
-    if (v != null) scrollListToEnd()
-  },
-  { flush: 'post' },
+const activityFingerprint = computed(() =>
+  props.activities.map((a) => `${a.id}:${a.status}:${a.label.length}`).join('|'),
 )
 
-onMounted(() => {
-  if (props.showCursor) scrollListToEnd()
-})
+watch(activityFingerprint, scrollListToEnd, { flush: 'post' })
+
+onMounted(scrollListToEnd)
 </script>
 
 <template>
   <div v-if="activities.length" class="assistant-activities">
-    <div ref="listEl" class="activity-list">
-      <div
-        v-for="step in activities"
-        :key="step.id"
-        class="activity-line"
-        :class="[
-          `phase-${step.phase}`,
-          step.status === 'done' ? 'is-done' : '',
-          step.status === 'error' ? 'is-error' : '',
-          step.id === pulseStepId ? 'is-active' : '',
-        ]"
-      >
-        <span
-          v-if="step.id === pulseStepId"
-          class="activity-dot pulsing"
-          aria-hidden="true"
-        />
-        <span v-else class="activity-dot-spacer" aria-hidden="true" />
-        <i
-          class="activity-phase-icon"
+    <ElScrollbar ref="listEl" always class="activity-list">
+      <div class="activity-items">
+        <div
+          v-for="step in activities"
+          :key="step.id"
+          class="activity-item"
           :class="[
-            phaseIconClass(step.phase),
-            step.status === 'error' ? 'is-error-icon' : '',
+            `phase-${step.phase}`,
+            step.status === 'done' ? 'is-done' : '',
+            step.status === 'error' ? 'is-error' : '',
+            step.id === pulseStepId ? 'is-active' : '',
           ]"
-          aria-hidden="true"
-        />
-        <span class="activity-label" :title="step.label">{{ step.label }}</span>
-        <i
-          v-if="step.phase === 'tool' && toolStatusIconClass(step.status)"
-          class="activity-status-icon"
-          :class="[toolStatusIconClass(step.status)!, step.status === 'error' ? 'is-error-icon' : '']"
-          aria-hidden="true"
-        />
+        >
+          <div class="activity-chip">
+            <span class="activity-type-tag">
+              <i
+                class="activity-phase-icon"
+                :class="[
+                  phaseIconClass(step.phase),
+                  step.status === 'error' ? 'is-error-icon' : '',
+                ]"
+                aria-hidden="true"
+              />
+              {{ phaseTag(step.phase) }}
+            </span>
+            <span class="activity-label" :title="step.label">{{ step.label }}</span>
+            <i
+              v-if="step.phase === 'tool' && toolStatusIconClass(step.status)"
+              class="activity-status-icon"
+              :class="[toolStatusIconClass(step.status)!, step.status === 'error' ? 'is-error-icon' : '']"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
       </div>
-    </div>
+    </ElScrollbar>
 
     <FlowStrip
       embedded
@@ -96,77 +95,57 @@ onMounted(() => {
 
 <style scoped>
 .activity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
+  margin-bottom: 6px;
+  padding: 4px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-2);
-  max-height: calc(12px * 1.5 * 5 + 4px * 4 + 16px);
-  overflow-y: auto;
+  height: calc(12px * 1.25 * 5 + 2px * 4 + 8px);
 }
 
-.activity-line {
+.activity-list :deep(.el-scrollbar__wrap) {
+  overflow-x: hidden;
+}
+
+.activity-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  min-height: calc(12px * 1.25);
+  padding: 1px 0;
   font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.5;
+  line-height: 1.25;
 }
 
-.activity-line.is-active {
-  color: var(--text);
-}
-
-.activity-line.is-done {
-  color: var(--text-3);
-}
-
-.activity-line.is-error {
-  color: var(--phase-error-muted);
-}
-
-.activity-dot {
+.activity-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .activity-phase-icon {
   flex-shrink: 0;
   width: 14px;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .activity-status-icon {
   flex-shrink: 0;
   font-size: 10px;
-  color: var(--phase-output-muted);
-}
-
-.activity-status-icon.is-error-icon {
-  color: var(--phase-error-muted);
-}
-
-.activity-dot-spacer {
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-}
-
-.activity-line.is-error .activity-phase-icon {
-  color: var(--phase-error-muted);
-}
-
-.activity-dot.pulsing {
-  animation: activity-bounce 0.9s ease-in-out infinite;
 }
 
 .activity-label {
@@ -175,10 +154,5 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@keyframes activity-bounce {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.35); opacity: 0.55; }
 }
 </style>

@@ -1,5 +1,6 @@
 @import '@fortawesome/fontawesome-free/css/all.min.css';
 @import './styles/phase.css';
+@import './styles/mermaid-flow.css';
 
 /* ===== BcAI Web UI — Light/Dark Theme ===== */
 *, *::before, *::after {
@@ -71,6 +72,11 @@
   --code-keyword: #af00db;
   --code-module: #267f99;
   --code-comment: #008000;
+
+  --el-color-primary: var(--accent);
+  --el-color-success: var(--free-color);
+  --el-color-danger: var(--error);
+  --el-border-radius-base: var(--radius-sm);
 }
 
 [data-theme="dark"] {
@@ -214,3 +220,64 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 .md-content a { color: var(--accent); text-decoration: none; }
 .md-content a:hover { text-decoration: underline; }
 
+/* Element Plus 全页布局壳 */
+.app-layout.el-container {
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app-layout > .el-aside {
+  overflow: hidden;
+}
+
+.shell-vertical.el-container {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.shell-vertical > .el-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.el-header.shell-header,
+.el-footer.shell-footer {
+  height: auto;
+  padding: 0;
+}
+
+.el-main.shell-main {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.el-aside.shell-aside {
+  overflow: hidden;
+}
+
+/* ===== Skeleton（页面秒开占位） ===== */
+.sk-block {
+  display: block;
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    var(--bg-3) 25%,
+    color-mix(in srgb, var(--bg-3) 55%, var(--border)) 50%,
+    var(--bg-3) 75%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes sk-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}

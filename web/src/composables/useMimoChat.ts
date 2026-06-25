@@ -1,10 +1,7 @@
 import { ref } from 'vue'
 import {
   createSession,
-  fetchSessionMessages,
-  pollAssistantReply,
   promptAsync,
-  userMessageCount,
   waitForMimoReady,
 } from '@/lib/mimo/client'
 import { getWorkDir, WORK_DIR_CHANGED } from '@/lib/workDir'
@@ -18,6 +15,10 @@ import {
   resolveDeltaKind,
 } from '@/lib/partPhase'
 import { useChatStore } from '@/stores/chat'
+import { waitTurnEnd } from '@/composables/turn/useTurnLifecycle'
+import type { MessageAttachment } from '@/lib/composer/attachments'
+import type { PollResult } from '@/lib/mimo/poll'
+import { persistSessionLinkAsync } from '@/lib/sessionMap'
 
 const traceEvents = ref<TraceEvent[]>([])
 const connected = ref(false)
@@ -30,8 +31,17 @@ const activeSessionFilter = ref<string | null>(null)
 const assistantTextParts = new Set<string>()
 const partKinds = new Map<string, string>()
 const messageRoles = new Map<string, string>()
+let turnAcceptUpdates = true
 
-function workDir(): string {
+type TurnFinishListener = (sessionID: string, info: Record<string, unknown>) => void
+const turnFinishListeners = new Set<TurnFinishListener>()
+
+export function onTurnFinish(listener: TurnFinishListener) {
+  turnFinishListeners.add(listener)
+  return () => turnFinishListeners.delete(listener)
+}
+
+export function workDirForTurn(): string {
   const dir = getWorkDir().trim()
   if (!dir) throw new Error('请先在顶部设置工作目录')
   return dir
@@ -59,11 +69,14 @@ function eventSessionID(raw: { type?: string; properties?: Record<string, unknow
   if (raw.type === 'message.part.delta') {
     return raw.properties?.sessionID as string | undefined
   }
+  if (raw.type === 'message.updated') {
+    return (raw.properties?.info as Record<string, unknown> | undefined)?.sessionID as string | undefined
+  }
   return undefined
 }
 
 async function ensureEventStream() {
-  const directory = workDir()
+  const directory = workDirForTurn()
   if (streamAbort && streamDirectory === directory) return
   streamAbort?.abort()
   streamAbort = new AbortController()
@@ -122,6 +135,11 @@ function applyAssistantUsage(info: Record<string, unknown>) {
   useChatStore().persist()
 }
 
+function notifyTurnFinish(sessionID: string | undefined, info: Record<string, unknown>) {
+  if (!sessionID || !info.finish) return
+  for (const listener of turnFinishListeners) listener(sessionID, info)
+}
+
 function handleMessageUpdated(raw: { type?: string; properties?: Record<string, unknown> }, sessionID?: string) {
   const chat = useChatStore()
   const conv = chat.activeConversation()
@@ -134,6 +152,7 @@ function handleMessageUpdated(raw: { type?: string; properties?: Record<string, 
   }
   if (info.role !== 'assistant') return
   applyAssistantUsage(info)
+  notifyTurnFinish(sessionID, info)
 }
 
 function pushPartActivity(part: Record<string, unknown>) {
@@ -153,6 +172,7 @@ function handleChatPart(raw: { type?: string; properties?: Record<string, unknow
   const conv = chat.activeConversation()
   if (!conv) return
   if (sessionID && sessionByConversation.get(conv.id) !== sessionID) return
+  if (!turnAcceptUpdates) return
 
   if (raw.type === 'message.part.delta') {
     const props = raw.properties ?? {}
@@ -216,37 +236,24 @@ function handleChatPart(raw: { type?: string; properties?: Record<string, unknow
   pushPartActivity(part)
 }
 
-const SESSION_MAP_KEY = 'mimo-web-session-map'
-
-function persistSessionLink(conversationId: string, sessionId: string, title: string) {
-  try {
-    const raw = localStorage.getItem(SESSION_MAP_KEY)
-    const map = raw
-      ? (JSON.parse(raw) as Record<string, { sessionId: string; title: string; updatedAt: number; createdAt?: number }>)
-      : {}
-    const prev = map[conversationId]
-    map[conversationId] = {
-      sessionId,
-      title,
-      updatedAt: Date.now(),
-      createdAt: prev?.createdAt ?? Date.now(),
-    }
-    localStorage.setItem(SESSION_MAP_KEY, JSON.stringify(map))
-  } catch {
-    // ignore
-  }
+export function persistSessionLinkForConv(
+  conversationId: string,
+  sessionId: string,
+  title: string,
+) {
+  void persistSessionLinkAsync(conversationId, sessionId, title)
 }
 
-async function ensureSession(conversationId: string): Promise<string> {
+export async function ensureSession(conversationId: string): Promise<string> {
   const existing = sessionByConversation.get(conversationId)
   if (existing) return existing
   await waitForMimoReady()
   mimoReady.value = true
-  const session = await createSession(workDir())
+  const session = await createSession(workDirForTurn())
   sessionByConversation.set(conversationId, session.id)
   activeSessionFilter.value = session.id
   const conv = useChatStore().activeConversation()
-  persistSessionLink(conversationId, session.id, conv?.title ?? '新对话')
+  void persistSessionLinkAsync(conversationId, session.id, conv?.title ?? '新对话')
   pushTrace([
     {
       id: `tr-${Date.now()}`,
@@ -260,43 +267,20 @@ async function ensureSession(conversationId: string): Promise<string> {
   return session.id
 }
 
-export async function sendViaMimo(userContent: string): Promise<void> {
-  const chat = useChatStore()
-  const conv = chat.activeConversation()
-  if (!conv) throw new Error('No active conversation')
-
-  const directory = workDir()
+export async function runTurn(
+  sessionID: string,
+  userContent: string,
+  usersBefore: number,
+  signal?: AbortSignal,
+  attachments: MessageAttachment[] = [],
+): Promise<PollResult> {
+  const directory = workDirForTurn()
   void ensureEventStream()
-  chat.pushAssistantActivity({ key: 'wait', phase: 'think', label: '等待 MiMo 响应…', status: 'running' })
-  const sessionID = await ensureSession(conv.id)
+  turnAcceptUpdates = true
   assistantTextParts.clear()
   partKinds.clear()
-
-  try {
-    const before = await fetchSessionMessages(sessionID, directory)
-    const usersBefore = userMessageCount(before)
-    await promptAsync(sessionID, userContent, directory)
-    const text = await pollAssistantReply(sessionID, directory, usersBefore)
-    const after = await fetchSessionMessages(sessionID, directory)
-    let usage = null as ReturnType<typeof usageFromMessageInfo>
-    for (let i = after.length - 1; i >= 0; i--) {
-      const msg = after[i]
-      if (msg.info?.role !== 'assistant') continue
-      usage = usageFromMessageInfo(msg.info as Record<string, unknown>)
-      if (usage) break
-    }
-    if (text) chat.setLastAssistantContent(text)
-    if (!lastAssistantContent()) {
-      throw new Error('未收到 MiMo 回复，请新建对话后重试')
-    }
-    chat.completeLastAssistant(usage ? { usage } : undefined)
-    persistSessionLink(conv.id, sessionID, conv.title)
-  } catch (e) {
-    sessionByConversation.delete(conv.id)
-    throw e
-  } finally {
-    chat.finishAssistantActivities()
-  }
+  await promptAsync(sessionID, userContent, directory, attachments)
+  return waitTurnEnd(sessionID, directory, usersBefore, signal)
 }
 
 export async function checkMimoStatus(): Promise<boolean> {

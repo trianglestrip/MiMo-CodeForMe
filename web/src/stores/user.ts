@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 export const useUserStore = defineStore('user', () => {
   const username = ref('user')
-  const displayName = ref('MiMoCode')
+  const displayName = ref(PRODUCT_NAME)
   const authenticated = ref(true)
   const loaded = ref(false)
 

@@ -1,66 +1,27 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { getWorkDir, WORK_DIR_CHANGED } from '@/lib/workDir'
-import { fetchSessionMessages, type SessionMessage } from '@/lib/mimo/client'
 import { subscribeMimoEvents } from '@/lib/mimo/eventStream'
+import { latestSessionIdFromMap } from '@/lib/sessionMap'
 import { SESSION_MAP_KEY } from './constants'
 import { createTraceEngine } from './traceEngine'
 import { sessionPageUrl } from './utils'
+import { useAsyncTraceSidebar } from '@/composables/trace/useAsyncTraceSidebar'
+import { useAsyncTraceTimeline } from '@/composables/trace/useAsyncTraceTimeline'
 
 export function useTracePage() {
   const engine = createTraceEngine(getWorkDir)
 
   const connMeta = ref('connecting…')
-  const emptyHint = ref('请从左侧选择对话')
+  const sidebar = useAsyncTraceSidebar(engine)
+  const timeline = useAsyncTraceTimeline(engine)
 
   let streamAbort: AbortController | null = null
   let storageTimer: ReturnType<typeof setInterval> | null = null
 
-  async function fetchAndReplay(sessionID: string) {
-    const directory = getWorkDir()
-    if (!directory) {
-      emptyHint.value = '请先在顶部设置工作目录'
-      return
-    }
-    const ses = engine.getSession(sessionID)
-    if (ses.loaded && ses.timeline.length) return
-    if (ses.timeline.length) {
-      ses.loaded = true
-      return
-    }
-    emptyHint.value = '加载中…'
-    try {
-      const messages = (await fetchSessionMessages(sessionID, directory)) as SessionMessage[]
-      if (ses.timeline.length) return
-      if (Array.isArray(messages) && messages.length) {
-        engine.replaySessionMessages(sessionID, messages)
-        emptyHint.value = ''
-        return
-      }
-      emptyHint.value = '该对话暂无消息，发送后将在此显示'
-      ses.loaded = true
-    } catch {
-      emptyHint.value = '无法加载该对话'
-    }
-  }
-
-  async function openSession(sessionID: string | null) {
-    engine.setActiveSession(sessionID)
-    if (!sessionID) {
-      emptyHint.value = '请从左侧选择对话'
-      return
-    }
-    const ses = engine.getSession(sessionID)
-    if (ses.timeline.length) {
-      emptyHint.value = ''
-      return
-    }
-    await fetchAndReplay(sessionID)
-  }
-
   async function navigateToSession(sessionID: string) {
     if (sessionID === engine.activeSessionID.value) return
     engine.navigateToSession(sessionID)
-    await openSession(sessionID)
+    await timeline.loadSession(sessionID)
   }
 
   function connectStream() {
@@ -102,55 +63,51 @@ export function useTracePage() {
     connectStream()
   }
 
-  function loadSidebarFromStorage() {
-    try {
-      const map = JSON.parse(localStorage.getItem(SESSION_MAP_KEY) || '{}') as Record<
-        string,
-        { sessionId?: string; title?: string; updatedAt?: number; createdAt?: number }
-      >
-      engine.syncFromStorageMap(map)
-    } catch {
-      // ignore
-    }
-  }
-
   onMounted(async () => {
-    loadSidebarFromStorage()
+    const map = await sidebar.bootstrap
 
-    let sid = engine.activeSessionID.value || engine.latestSessionIdFromStorage()
+    const sid =
+      engine.activeSessionID.value || latestSessionIdFromMap(map)
     if (sid && sid !== engine.activeSessionID.value) {
       engine.setActiveSession(sid)
       history.replaceState({ session: sid }, '', sessionPageUrl(sid))
     }
-    await openSession(sid)
+    await timeline.loadSession(sid)
 
     window.addEventListener('storage', onStorage)
     window.addEventListener('popstate', onPopState)
     window.addEventListener(WORK_DIR_CHANGED, onWorkDirChanged)
-    storageTimer = setInterval(loadSidebarFromStorage, 3000)
+    storageTimer = setInterval(() => {
+      void sidebar.refresh()
+    }, 3000)
     connectStream()
 
     if (new URLSearchParams(location.search).get('simulate') === '1') {
       engine.runSimulation()
       connMeta.value = '模拟模式'
-      emptyHint.value = ''
+      timeline.hint.value = ''
+      timeline.ready.value = true
     }
   })
 
   function onStorage(e: StorageEvent) {
     if (e.key !== SESSION_MAP_KEY || !e.newValue) return
     try {
-      engine.syncFromStorageMap(JSON.parse(e.newValue))
+      const map = JSON.parse(e.newValue) as Record<
+        string,
+        { sessionId?: string; title?: string; updatedAt?: number; createdAt?: number }
+      >
+      engine.syncFromStorageMap(map)
+      const latest = latestSessionIdFromMap(map)
+      if (!engine.activeSessionID.value && latest) void navigateToSession(latest)
     } catch {
       // ignore
     }
-    const latest = engine.latestSessionIdFromStorage()
-    if (!engine.activeSessionID.value && latest) void navigateToSession(latest)
   }
 
   function onPopState() {
     const next = new URLSearchParams(location.search).get('session')
-    void openSession(next)
+    void timeline.loadSession(next)
   }
 
   onUnmounted(() => {
@@ -173,7 +130,9 @@ export function useTracePage() {
   return {
     engine,
     connMeta,
-    emptyHint,
+    sidebarReady: sidebar.ready,
+    timelineReady: timeline.ready,
+    emptyHint: timeline.hint,
     navigateToSession,
   }
 }

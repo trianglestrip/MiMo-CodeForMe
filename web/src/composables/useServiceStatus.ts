@@ -38,7 +38,7 @@ async function checkMimo(): Promise<{ ok: boolean; port: string; detail?: string
 
 export function useServiceStatus() {
   const api = ref<PortStatus>({
-    label: 'MiMo',
+    label: 'API',
     port: '4096',
     status: 'checking',
     detail: '检测中…',
@@ -65,8 +65,8 @@ export function useServiceStatus() {
     api.value.port = mimo.port
     api.value.status = mimo.ok ? 'ok' : 'fail'
     api.value.detail = mimo.ok
-      ? `mimo serve 就绪 · ${mimo.port}`
-      : mimo.detail ?? `mimo serve 未连接 · 请确认「MiMo 4096」窗口已启动 · ${mimo.port}`
+      ? `后端就绪 · ${mimo.port}`
+      : mimo.detail ?? `后端未连接 · 请确认 API 窗口（4096）已启动 · ${mimo.port}`
 
     fe.value.status = 'ok'
     fe.value.detail = `前端正常 · ${fe.value.port}`

@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { MessageAttachment } from '@/lib/composer/attachments'
 import type { ActivityPhase } from '@/lib/partPhase'
+import { flushWriteJson, scheduleWriteJson } from '@/lib/asyncLocalStorage'
+import { CHAT_STORAGE_KEY, ensureChatInit } from '@/stores/chatInit'
 
 export type { ActivityPhase } from '@/lib/partPhase'
 
@@ -20,11 +23,15 @@ export interface ActivityStep {
   status: ActivityStatus
 }
 
+export type StopReason = 'idle_early' | 'timeout' | 'aborted' | 'error'
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  /** @deprecated 旧版仅存图片 data URL，新消息请用 attachments */
   images?: string[]
+  attachments?: MessageAttachment[]
   reasoning?: string
   activities?: ActivityStep[]
   createdAt: number
@@ -33,6 +40,8 @@ export interface ChatMessage {
   usage?: { total: number; input: number; output: number }
   model?: string
   toolCalls?: ToolCallPayload[]
+  stopReason?: StopReason
+  incomplete?: boolean
 }
 
 export interface Conversation {
@@ -43,11 +52,8 @@ export interface Conversation {
   updatedAt: number
 }
 
-const LOCAL_CONV_KEY = 'mimo-web-conversations'
-
-function saveLocalConversations(conversations: Conversation[]) {
-  localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(conversations))
-}
+const LOCAL_CONV_KEY = CHAT_STORAGE_KEY
+const PERSIST_DEBOUNCE_MS = 400
 
 function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -58,23 +64,44 @@ export const useChatStore = defineStore('chat', () => {
   const activeId = ref<string | null>(null)
   const streaming = ref(false)
   const error = ref<string | null>(null)
-  const loaded = ref(false)
+  const listLoaded = ref(false)
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+  function ensureInit() {
+    return ensureChatInit()
+  }
+
+  /** @deprecated 使用 ensureInit；保留兼容 */
+  async function init() {
+    await ensureInit()
+  }
+
+  function persistNow() {
+    return flushWriteJson(LOCAL_CONV_KEY, conversations.value)
+  }
+
+  function flushPersist() {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    void persistNow()
+  }
+
+  function schedulePersist() {
+    if (!streaming.value) {
+      flushPersist()
+      return
+    }
+    if (persistTimer) return
+    persistTimer = setTimeout(() => {
+      persistTimer = null
+      void scheduleWriteJson(LOCAL_CONV_KEY, conversations.value)
+    }, PERSIST_DEBOUNCE_MS)
+  }
 
   const activeConversation = () =>
     conversations.value.find(c => c.id === activeId.value) ?? null
-
-  async function init() {
-    try {
-      const raw = localStorage.getItem(LOCAL_CONV_KEY)
-      conversations.value = raw ? (JSON.parse(raw) as Conversation[]) : []
-      activeId.value = conversations.value[0]?.id ?? null
-      if (conversations.value.length === 0) await newConversation()
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load conversations'
-    } finally {
-      loaded.value = true
-    }
-  }
 
   async function newConversation() {
     const now = Date.now()
@@ -87,7 +114,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     conversations.value.unshift(conv)
     activeId.value = conv.id
-    saveLocalConversations(conversations.value)
+    await persistNow()
     return conv
   }
 
@@ -97,7 +124,7 @@ export const useChatStore = defineStore('chat', () => {
       activeId.value = conversations.value[0]?.id ?? null
       if (conversations.value.length === 0) await newConversation()
     }
-    saveLocalConversations(conversations.value)
+    await persistNow()
   }
 
   function selectConversation(id: string) {
@@ -118,7 +145,7 @@ export const useChatStore = defineStore('chat', () => {
     if (conv.messages.filter(x => x.role === 'user').length === 1 && msg.role === 'user') {
       conv.title = msg.content.slice(0, 40) + (msg.content.length > 40 ? '…' : '')
     }
-    saveLocalConversations(conversations.value)
+    void scheduleWriteJson(LOCAL_CONV_KEY, conversations.value)
     return m
   }
 
@@ -156,7 +183,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     const conv = activeConversation()
     if (conv) conv.updatedAt = Date.now()
-    saveLocalConversations(conversations.value)
+    schedulePersist()
   }
 
   function finishAssistantActivities() {
@@ -165,19 +192,25 @@ export const useChatStore = defineStore('chat', () => {
     for (const a of last.activities) {
       if (a.status === 'running') a.status = 'done'
     }
-    saveLocalConversations(conversations.value)
+    flushPersist()
   }
 
-  function completeLastAssistant(meta?: { usage?: ChatMessage['usage'] }) {
+  function completeLastAssistant(meta?: {
+    usage?: ChatMessage['usage']
+    stopReason?: StopReason
+    incomplete?: boolean
+  }) {
     const last = lastAssistant()
     if (!last) return
     const now = Date.now()
     last.completedAt = now
     last.durationMs = now - last.createdAt
     if (meta?.usage) last.usage = meta.usage
+    if (meta?.stopReason) last.stopReason = meta.stopReason
+    if (meta?.incomplete !== undefined) last.incomplete = meta.incomplete
     const conv = activeConversation()
     if (conv) conv.updatedAt = now
-    saveLocalConversations(conversations.value)
+    flushPersist()
   }
 
   function setLastAssistantContent(text: string) {
@@ -190,7 +223,7 @@ export const useChatStore = defineStore('chat', () => {
         if (a.phase === 'output' && a.status === 'running') a.status = 'done'
       }
       conv.updatedAt = Date.now()
-      saveLocalConversations(conversations.value)
+      schedulePersist()
     }
   }
 
@@ -201,14 +234,12 @@ export const useChatStore = defineStore('chat', () => {
     if (last) {
       last.content += text
       conv.updatedAt = Date.now()
-      saveLocalConversations(conversations.value)
+      schedulePersist()
     }
   }
 
   async function persist() {
-    const conv = activeConversation()
-    if (!conv) return
-    saveLocalConversations(conversations.value)
+    await persistNow()
   }
 
   async function removeLastAssistantIfEmpty() {
@@ -223,7 +254,7 @@ export const useChatStore = defineStore('chat', () => {
       !last.toolCalls?.length
     ) {
       conv.messages.pop()
-      saveLocalConversations(conversations.value)
+      void scheduleWriteJson(LOCAL_CONV_KEY, conversations.value)
     }
   }
 
@@ -232,9 +263,10 @@ export const useChatStore = defineStore('chat', () => {
     activeId,
     streaming,
     error,
-    loaded,
-    activeConversation,
+    listLoaded,
+    ensureInit,
     init,
+    activeConversation,
     newConversation,
     deleteConversation,
     selectConversation,
@@ -246,6 +278,7 @@ export const useChatStore = defineStore('chat', () => {
     setLastAssistantContent,
     persist,
     removeLastAssistantIfEmpty,
+    lastAssistant,
     genId,
   }
 })
