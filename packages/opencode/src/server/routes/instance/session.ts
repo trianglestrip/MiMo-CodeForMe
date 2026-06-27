@@ -12,6 +12,7 @@ import { SessionRevert } from "@/session/revert"
 import { SessionShare } from "@/share"
 import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
+import { ContextDump } from "@/session/dump"
 import { Todo } from "@/session/todo"
 import { Effect } from "effect"
 import { Agent } from "@/agent/agent"
@@ -1046,6 +1047,106 @@ export const SessionRoutes = lazy(() =>
         })
 
         return c.body(null, 204)
+      },
+    )
+    .post(
+      "/:sessionID/dump-context",
+      describeRoute({
+        summary: "Dump inference context",
+        description:
+          "Assemble and export the current inference context (system prompt, messages, tools). Requires experimental.dump_context. Writes to .mimocode/dumps/ and returns JSON.",
+        operationId: "session.dump_context",
+        responses: {
+          200: {
+            description: "Context dump",
+            content: {
+              "application/json": {
+                schema: resolver(ContextDump.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          format: z.enum(["json", "text"]).optional(),
+          agentID: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
+        try {
+          return await jsonRequest("SessionRoutes.dumpContext", c, function* () {
+            return yield* ContextDump.write({
+              sessionID,
+              agentID: query.agentID,
+              format: query.format,
+            })
+          })
+        } catch (err) {
+          if (ContextDump.DisabledError.isInstance(err)) {
+            return c.json({ error: err.data.message }, 403)
+          }
+          throw err
+        }
+      },
+    )
+    .get(
+      "/:sessionID/dump-context",
+      describeRoute({
+        summary: "Get inference context (JSON)",
+        description:
+          "Return assembled inference context without writing to disk. Requires experimental.dump_context.",
+        operationId: "session.dump_context.get",
+        responses: {
+          200: {
+            description: "Context dump",
+            content: {
+              "application/json": {
+                schema: resolver(ContextDump.Info.omit({ path: true })),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          agentID: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
+        try {
+          return await jsonRequest("SessionRoutes.dumpContextGet", c, function* () {
+            return yield* ContextDump.assemble({
+              sessionID,
+              agentID: query.agentID,
+            })
+          })
+        } catch (err) {
+          if (ContextDump.DisabledError.isInstance(err)) {
+            return c.json({ error: err.data.message }, 403)
+          }
+          throw err
+        }
       },
     )
     .post(
