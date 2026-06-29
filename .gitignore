@@ -32,9 +32,8 @@ logs/
 tsconfig.tsbuildinfo
 .dev-home/
 
-# distWebServer runtime (buildserve.bat 生成 exe，运行时数据不进 git)
-/distWebServer/server/mimo.exe
-/distWebServer/.dev-home/
+# distWebServer 绿色运行包（buildserve.bat 生成，不进 git）
+/distWebServer/
 /script/mimo-run.exe
 
 # Local agent harness state
