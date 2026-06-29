@@ -829,6 +829,18 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           },
         },
       }),
+    mimo: Effect.fnUntraced(function* () {
+      const cfg = yield* dep.config()
+      const providerOpts = cfg.provider?.mimo?.options ?? {}
+      return {
+        autoload: true,
+        options: {
+          baseURL: providerOpts.baseURL ?? "https://api.xiaomimimo.com/api/free-ai/openai",
+          apiKey: providerOpts.apiKey ?? "mimo-free",
+          ...(typeof providerOpts.fetch === "function" ? { fetch: providerOpts.fetch } : {}),
+        },
+      }
+    }),
   }
 }
 
@@ -937,7 +949,10 @@ export const ConfigProvidersResult = Schema.Struct({
 export type ConfigProvidersResult = Types.DeepMutable<Schema.Schema.Type<typeof ConfigProvidersResult>>
 
 export function defaultModelIDs<T extends { models: Record<string, { id: string }> }>(providers: Record<string, T>) {
-  return mapValues(providers, (item) => sort(Object.values(item.models))[0].id)
+  return mapValues(providers, (item, providerID) => {
+    if (providerID === "mimo" && item.models["mimo-auto"]) return "mimo-auto"
+    return sort(Object.values(item.models))[0].id
+  })
 }
 
 export interface Interface {

@@ -484,6 +484,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       return projects.map((project) => {
         const color = project.icon?.color ?? colors[project.worktree]
         if (!color) return project
+        if (project.icon?.color === color) return project
         const icon = project.icon ? { ...project.icon, color } : { color }
         return { ...project, icon }
       })

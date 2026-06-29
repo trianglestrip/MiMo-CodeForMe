@@ -153,6 +153,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
+    const mimoAutoModel = () => {
+      const model = { providerID: "mimo", modelID: "mimo-auto" }
+      if (validModel(model)) return model
+    }
+
     const defaultModel = () => {
       const defaults = providers.default()
       for (const provider of providers.connected()) {
@@ -169,7 +174,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
-    const fallback = createMemo<ModelKey | undefined>(() => configuredModel() ?? recentModel() ?? defaultModel())
+    const fallback = createMemo<ModelKey | undefined>(
+      () => configuredModel() ?? recentModel() ?? mimoAutoModel() ?? defaultModel(),
+    )
 
     const agent = {
       list,

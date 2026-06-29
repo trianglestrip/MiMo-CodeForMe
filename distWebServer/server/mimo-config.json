@@ -1,0 +1,8 @@
+﻿{
+    "model":  "mimo/mimo-auto",
+    "$schema":  "https://opencode.ai/config.json",
+    "disabled_providers":  [
+                               "opencode",
+                               "opencode-go"
+                           ]
+}

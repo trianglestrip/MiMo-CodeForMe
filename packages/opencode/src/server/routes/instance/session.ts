@@ -6,12 +6,14 @@ import z from "zod"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
 import { SessionPrompt } from "@/session/prompt"
+import { DebugCapture } from "@/session/debug-capture"
 import { SessionRunState } from "@/session/run-state"
 import { SessionCompaction } from "@/session/compaction"
 import { SessionRevert } from "@/session/revert"
 import { SessionShare } from "@/share"
 import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
+import { ContextDump } from "@/session/dump"
 import { Todo } from "@/session/todo"
 import { Effect } from "effect"
 import { Agent } from "@/agent/agent"
@@ -808,6 +810,54 @@ export const SessionRoutes = lazy(() =>
         return c.json(message)
       },
     )
+    .get(
+      "/:sessionID/debug-context",
+      describeRoute({
+        summary: "Get debug context snapshot",
+        description:
+          "Return the in-memory LLM request prefix snapshot captured before the model call. Optional messageID selects a specific user turn.",
+        operationId: "session.debug_context",
+        responses: {
+          200: {
+            description: "Debug snapshot",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    system: z.array(z.string()),
+                    tools: z.array(z.string()),
+                    additions: z.array(z.string()),
+                    instructionPaths: z.array(z.string()),
+                    messageCount: z.number(),
+                    capturedAt: z.number(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          messageID: MessageID.zod.optional(),
+        }),
+      ),
+      async (c) => {
+        const { sessionID } = c.req.valid("param")
+        const { messageID } = c.req.valid("query")
+        const snapshot = DebugCapture.get(sessionID, messageID)
+        if (!snapshot) return c.json({ error: "Debug context not found" }, 404)
+        return c.json(snapshot)
+      },
+    )
     .delete(
       "/:sessionID/message/:messageID",
       describeRoute({
@@ -1046,6 +1096,106 @@ export const SessionRoutes = lazy(() =>
         })
 
         return c.body(null, 204)
+      },
+    )
+    .post(
+      "/:sessionID/dump-context",
+      describeRoute({
+        summary: "Dump inference context",
+        description:
+          "Assemble and export the current inference context (system prompt, messages, tools). Requires experimental.dump_context. Writes to .mimocode/dumps/ and returns JSON.",
+        operationId: "session.dump_context",
+        responses: {
+          200: {
+            description: "Context dump",
+            content: {
+              "application/json": {
+                schema: resolver(ContextDump.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          format: z.enum(["json", "text"]).optional(),
+          agentID: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
+        try {
+          return await jsonRequest("SessionRoutes.dumpContext", c, function* () {
+            return yield* ContextDump.write({
+              sessionID,
+              agentID: query.agentID,
+              format: query.format,
+            })
+          })
+        } catch (err) {
+          if (ContextDump.DisabledError.isInstance(err)) {
+            return c.json({ error: err.data.message }, 403)
+          }
+          throw err
+        }
+      },
+    )
+    .get(
+      "/:sessionID/dump-context",
+      describeRoute({
+        summary: "Get inference context (JSON)",
+        description:
+          "Return assembled inference context without writing to disk. Requires experimental.dump_context.",
+        operationId: "session.dump_context.get",
+        responses: {
+          200: {
+            description: "Context dump",
+            content: {
+              "application/json": {
+                schema: resolver(ContextDump.Info.omit({ path: true })),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          agentID: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
+        try {
+          return await jsonRequest("SessionRoutes.dumpContextGet", c, function* () {
+            return yield* ContextDump.assemble({
+              sessionID,
+              agentID: query.agentID,
+            })
+          })
+        } catch (err) {
+          if (ContextDump.DisabledError.isInstance(err)) {
+            return c.json({ error: err.data.message }, 403)
+          }
+          throw err
+        }
       },
     )
     .post(

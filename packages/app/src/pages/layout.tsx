@@ -316,8 +316,10 @@ export default function Layout(props: ParentProps) {
 
   const navigateWithSidebarReset = (href: string) => {
     clearSidebarHoverState()
-    navigate(href)
-    layout.mobileSidebar.hide()
+    queueMicrotask(() => {
+      navigate(href)
+      layout.mobileSidebar.hide()
+    })
   }
 
   function cycleTheme(direction = 1) {

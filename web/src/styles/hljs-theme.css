@@ -1,0 +1,139 @@
+/* GitHub (light) — scoped to markdown code blocks, high saturation */
+[data-theme="light"] .md-content pre code.hljs {
+  color: #1a1a1a;
+  background: transparent;
+}
+
+[data-theme="light"] .md-content .hljs-doctag,
+[data-theme="light"] .md-content .hljs-keyword,
+[data-theme="light"] .md-content .hljs-meta .hljs-keyword,
+[data-theme="light"] .md-content .hljs-template-tag,
+[data-theme="light"] .md-content .hljs-template-variable,
+[data-theme="light"] .md-content .hljs-type,
+[data-theme="light"] .md-content .hljs-variable.language_ {
+  color: #ff1744;
+}
+
+[data-theme="light"] .md-content .hljs-title,
+[data-theme="light"] .md-content .hljs-title.class_,
+[data-theme="light"] .md-content .hljs-title.class_.inherited__,
+[data-theme="light"] .md-content .hljs-title.function_ {
+  color: #9d00ff;
+}
+
+[data-theme="light"] .md-content .hljs-attr,
+[data-theme="light"] .md-content .hljs-attribute,
+[data-theme="light"] .md-content .hljs-literal,
+[data-theme="light"] .md-content .hljs-meta,
+[data-theme="light"] .md-content .hljs-number,
+[data-theme="light"] .md-content .hljs-operator,
+[data-theme="light"] .md-content .hljs-variable,
+[data-theme="light"] .md-content .hljs-selector-attr,
+[data-theme="light"] .md-content .hljs-selector-class,
+[data-theme="light"] .md-content .hljs-selector-id {
+  color: #0066ff;
+}
+
+[data-theme="light"] .md-content .hljs-regexp,
+[data-theme="light"] .md-content .hljs-string,
+[data-theme="light"] .md-content .hljs-meta .hljs-string {
+  color: #e60026;
+}
+
+[data-theme="light"] .md-content .hljs-built_in,
+[data-theme="light"] .md-content .hljs-symbol {
+  color: #ff6d00;
+}
+
+[data-theme="light"] .md-content .hljs-comment,
+[data-theme="light"] .md-content .hljs-code,
+[data-theme="light"] .md-content .hljs-formula {
+  color: #00a152;
+  font-style: italic;
+}
+
+[data-theme="light"] .md-content .hljs-name,
+[data-theme="light"] .md-content .hljs-quote,
+[data-theme="light"] .md-content .hljs-selector-tag,
+[data-theme="light"] .md-content .hljs-selector-pseudo {
+  color: #00c853;
+}
+
+[data-theme="light"] .md-content .hljs-section {
+  color: #2979ff;
+  font-weight: 700;
+}
+
+[data-theme="light"] .md-content .hljs-addition {
+  color: #00c853;
+  background-color: rgba(0, 200, 83, 0.12);
+}
+
+[data-theme="light"] .md-content .hljs-deletion {
+  color: #ff1744;
+  background-color: rgba(255, 23, 68, 0.1);
+}
+
+/* Atom One Dark — scoped to markdown code blocks, neon */
+[data-theme="dark"] .md-content pre code.hljs {
+  color: #f0f0f0;
+  background: transparent;
+}
+
+[data-theme="dark"] .md-content .hljs-comment,
+[data-theme="dark"] .md-content .hljs-quote {
+  color: #69f0ae;
+  font-style: italic;
+}
+
+[data-theme="dark"] .md-content .hljs-doctag,
+[data-theme="dark"] .md-content .hljs-keyword,
+[data-theme="dark"] .md-content .hljs-formula {
+  color: #ea80fc;
+}
+
+[data-theme="dark"] .md-content .hljs-section,
+[data-theme="dark"] .md-content .hljs-name,
+[data-theme="dark"] .md-content .hljs-selector-tag,
+[data-theme="dark"] .md-content .hljs-deletion,
+[data-theme="dark"] .md-content .hljs-subst {
+  color: #ff5252;
+}
+
+[data-theme="dark"] .md-content .hljs-literal {
+  color: #18ffff;
+}
+
+[data-theme="dark"] .md-content .hljs-string,
+[data-theme="dark"] .md-content .hljs-regexp,
+[data-theme="dark"] .md-content .hljs-addition,
+[data-theme="dark"] .md-content .hljs-attribute,
+[data-theme="dark"] .md-content .hljs-meta .hljs-string {
+  color: #69f0ae;
+}
+
+[data-theme="dark"] .md-content .hljs-attr,
+[data-theme="dark"] .md-content .hljs-variable,
+[data-theme="dark"] .md-content .hljs-template-variable,
+[data-theme="dark"] .md-content .hljs-type,
+[data-theme="dark"] .md-content .hljs-selector-class,
+[data-theme="dark"] .md-content .hljs-selector-attr,
+[data-theme="dark"] .md-content .hljs-selector-pseudo,
+[data-theme="dark"] .md-content .hljs-number {
+  color: #ffab40;
+}
+
+[data-theme="dark"] .md-content .hljs-symbol,
+[data-theme="dark"] .md-content .hljs-bullet,
+[data-theme="dark"] .md-content .hljs-link,
+[data-theme="dark"] .md-content .hljs-meta,
+[data-theme="dark"] .md-content .hljs-selector-id,
+[data-theme="dark"] .md-content .hljs-title {
+  color: #82b1ff;
+}
+
+[data-theme="dark"] .md-content .hljs-built_in,
+[data-theme="dark"] .md-content .hljs-title.class_,
+[data-theme="dark"] .md-content .hljs-class .hljs-title {
+  color: #ffd740;
+}

@@ -110,6 +110,19 @@ const getDefaultUrl = () => {
   return getCurrentUrl()
 }
 
+const getServerHttp = (): ServerConnection.Http["http"] => {
+  const password = import.meta.env.VITE_OPENCODE_SERVER_PASSWORD
+  return {
+    url: getCurrentUrl(),
+    ...(password
+      ? {
+          username: import.meta.env.VITE_OPENCODE_SERVER_USERNAME ?? "mimocode",
+          password,
+        }
+      : {}),
+  }
+}
+
 const platform: Platform = {
   platform: "web",
   version: pkg.version,
@@ -126,7 +139,7 @@ const platform: Platform = {
 }
 
 if (root instanceof HTMLElement) {
-  const server: ServerConnection.Http = { type: "http", http: { url: getCurrentUrl() } }
+  const server: ServerConnection.Http = { type: "http", http: getServerHttp() }
   render(
     () => (
       <PlatformProvider value={platform}>

@@ -34,6 +34,7 @@ import { SessionSummary } from "@/session/summary"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionCheckpoint } from "@/session/checkpoint"
 import { Instruction } from "@/session/instruction"
+import { SystemPrompt } from "@/session/system"
 import { LLM } from "@/session/llm"
 import { LSP } from "@/lsp"
 import { MCP } from "@/mcp"
@@ -97,6 +98,7 @@ export const AppLayer = Layer.suspend(() =>
     SessionPrompt.defaultLayer,
     SessionCheckpoint.defaultLayer,
     Instruction.defaultLayer,
+    SystemPrompt.defaultLayer,
     LLM.defaultLayer,
     LSP.defaultLayer,
     MCP.defaultLayer,
