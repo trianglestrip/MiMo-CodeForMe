@@ -9,6 +9,7 @@ declare global {
       username?: string
       password?: string
       workDir?: string
+      workDirRoot?: string
       apiPort?: string
     }
   }

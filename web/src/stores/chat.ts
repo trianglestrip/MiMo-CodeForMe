@@ -42,6 +42,7 @@ export interface ChatMessage {
   toolCalls?: ToolCallPayload[]
   stopReason?: StopReason
   incomplete?: boolean
+  backendMessageId?: string
 }
 
 export interface Conversation {

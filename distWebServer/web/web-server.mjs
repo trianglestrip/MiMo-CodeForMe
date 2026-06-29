@@ -5,13 +5,16 @@ import { fileURLToPath } from 'node:url'
 
 // 绿色版 Web 静态服务 + /mimo 反向代理（与 index.html 同目录）
 const webDir = fileURLToPath(new URL('.', import.meta.url))
+const distRoot = join(webDir, '..')
+const defaultWorkDir = join(distRoot, 'work').replace(/\\/g, '/')
+const workDirRoot = distRoot.replace(/\\/g, '/')
 const port = Number(process.env.WEB_PORT ?? 8000)
-const mimo = process.env.MIMO_UPSTREAM ?? 'http://127.0.0.1:9000'
-const mimoPort = new URL(mimo).port || '9000'
+const mimo = process.env.MIMO_UPSTREAM ?? 'http://127.0.0.1:4096'
+const mimoPort = new URL(mimo).port || '4096'
 
 writeFileSync(
   join(webDir, 'mimo-config.js'),
-  `window.MIMO_TRACE_CONFIG={baseUrl:'/mimo',username:'mimocode',password:'mimocode-standalone',apiPort:'${mimoPort}'};\n`,
+  `window.MIMO_TRACE_CONFIG={baseUrl:'/mimo',username:'mimocode',password:'mimocode-standalone',apiPort:'${mimoPort}',workDir:'${defaultWorkDir.replace(/'/g, "\\'")}',workDirRoot:'${workDirRoot.replace(/'/g, "\\'")}'};\n`,
 )
 
 const mime = {

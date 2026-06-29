@@ -75,6 +75,7 @@ import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { MaxMode } from "./max-mode"
+import { DebugCapture } from "./debug-capture"
 import { Shell } from "@/shell/shell"
 import { AppFileSystem } from "@mimo-ai/shared/filesystem"
 import { Truncate } from "@/tool"
@@ -3049,6 +3050,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 Effect.provideService(LLM.Service, llm),
                 Effect.provideService(ToolRegistry.Service, registry),
               )
+            const worktree = (yield* InstanceState.context).worktree
+            const instructionPaths = Array.from(instructions.paths, (p) => Instruction.display(p, worktree))
+            DebugCapture.capture(sessionID, lastUser.id, {
+              system: prebuiltSystem,
+              tools: Object.keys(tools),
+              additions,
+              instructionPaths,
+              messageCount: modelMsgs.length,
+            })
             const maxModeCfg = (yield* config.get()).experimental?.maxMode
             const useMaxMode =
               agent.name === MaxMode.MAX_MODE_AGENT && maxModeCfg !== undefined && format.type !== "json_schema"

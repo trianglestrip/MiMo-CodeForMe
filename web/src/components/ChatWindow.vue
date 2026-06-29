@@ -52,15 +52,18 @@ const streamingCursorMessageId = computed(() => {
 })
 
 const traceHref = ref('/trace.html')
+const activeSessionId = ref<string | undefined>(undefined)
 
 async function refreshTraceHref() {
   const conv = chat.activeConversation()
   if (!conv) {
     traceHref.value = '/trace.html'
+    activeSessionId.value = undefined
     return
   }
   const map = await loadSessionMapAsync()
   const sid = map[conv.id]?.sessionId
+  activeSessionId.value = sid
   traceHref.value = sid ? `/trace.html?session=${encodeURIComponent(sid)}` : '/trace.html'
 }
 
@@ -168,6 +171,7 @@ watch(() => chat.activeId, scrollToBottom)
             :message="msg"
             :show-cursor="msg.id === streamingCursorMessageId"
             :trace-href="traceHref"
+            :session-id="activeSessionId"
           />
         </template>
       </ElScrollbar>

@@ -6,6 +6,7 @@ import z from "zod"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
 import { SessionPrompt } from "@/session/prompt"
+import { DebugCapture } from "@/session/debug-capture"
 import { SessionRunState } from "@/session/run-state"
 import { SessionCompaction } from "@/session/compaction"
 import { SessionRevert } from "@/session/revert"
@@ -807,6 +808,54 @@ export const SessionRoutes = lazy(() =>
           messageID: params.messageID,
         })
         return c.json(message)
+      },
+    )
+    .get(
+      "/:sessionID/debug-context",
+      describeRoute({
+        summary: "Get debug context snapshot",
+        description:
+          "Return the in-memory LLM request prefix snapshot captured before the model call. Optional messageID selects a specific user turn.",
+        operationId: "session.debug_context",
+        responses: {
+          200: {
+            description: "Debug snapshot",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    system: z.array(z.string()),
+                    tools: z.array(z.string()),
+                    additions: z.array(z.string()),
+                    instructionPaths: z.array(z.string()),
+                    messageCount: z.number(),
+                    capturedAt: z.number(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          messageID: MessageID.zod.optional(),
+        }),
+      ),
+      async (c) => {
+        const { sessionID } = c.req.valid("param")
+        const { messageID } = c.req.valid("query")
+        const snapshot = DebugCapture.get(sessionID, messageID)
+        if (!snapshot) return c.json({ error: "Debug context not found" }, 404)
+        return c.json(snapshot)
       },
     )
     .delete(

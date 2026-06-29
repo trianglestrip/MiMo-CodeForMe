@@ -43,6 +43,7 @@ distWebServer/web/*
 !distWebServer/web/web-server.mjs
 !distWebServer/web/start-web.bat
 distWebServer/server/mimo.exe
+distWebServer/server/mimo-auth.json
 distWebServer/server/_pack/
 distWebServer/server/node_modules/
 distWebServer/work/

@@ -12,10 +12,12 @@ export default defineConfig(({ mode }) => {
 
   function mimoTraceConfigJs(devProxy: boolean) {
     const baseUrl = devProxy ? '/mimo' : mimoServerUrl
+    const apiPort = new URL(mimoServerUrl).port || '4096'
     return `window.MIMO_TRACE_CONFIG = {
   baseUrl: '${baseUrl}',
   username: 'mimocode',
   password: 'mimocode-standalone',
+  apiPort: '${apiPort}',
 }
 `
   }

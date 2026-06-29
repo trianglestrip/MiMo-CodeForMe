@@ -74,6 +74,12 @@ export function createTurnEngine() {
     try {
       const result = await runTurn(sessionID, content, usersBefore, activeAbort.signal, attachments)
       const after = await fetchSessionMessages(sessionID, directory)
+      const userMsgs = after.filter((m) => m.info?.role === 'user')
+      const backendMessageId = userMsgs[userMsgs.length - 1]?.info?.id
+      if (typeof backendMessageId === 'string') {
+        const lastUser = [...conv.messages].reverse().find((m) => m.role === 'user')
+        if (lastUser) lastUser.backendMessageId = backendMessageId
+      }
       let usage = null as ReturnType<typeof usageFromMessageInfo>
       for (let i = after.length - 1; i >= 0; i--) {
         const msg = after[i]

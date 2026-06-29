@@ -69,6 +69,7 @@ export async function promptAsync(
   message: string,
   directory: string,
   attachments: Pick<MessageAttachment, 'filename' | 'mime' | 'url'>[] = [],
+  model?: { providerID: string; modelID: string },
 ): Promise<void> {
   const res = await fetchWithTimeout(
     withDirectory(`/session/${encodeURIComponent(sessionID)}/prompt_async`, directory),
@@ -78,7 +79,10 @@ export async function promptAsync(
         Authorization: authHeader(),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ parts: buildPromptParts(message, attachments) }),
+      body: JSON.stringify({
+        parts: buildPromptParts(message, attachments),
+        ...(model ? { model } : {}),
+      }),
     },
     60_000,
   )
@@ -87,8 +91,75 @@ export async function promptAsync(
   }
 }
 
+export type ProviderModel = {
+  id: string
+  providerID: string
+  name: string
+  limit?: { context?: number; output?: number }
+  capabilities?: {
+    toolcall?: boolean
+    reasoning?: boolean
+  }
+}
+
+export type ProviderListResult = {
+  all: Array<{
+    id: string
+    name: string
+    models: Record<string, ProviderModel>
+  }>
+  default: Record<string, string>
+  connected: string[]
+}
+
+export async function fetchProviders(directory: string): Promise<ProviderListResult> {
+  const res = await fetchWithTimeout(withDirectory('/provider', directory), {
+    headers: { Authorization: authHeader() },
+  })
+  if (!res.ok) {
+    throw new Error(`provider.list failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json() as Promise<ProviderListResult>
+}
+
+export type DebugContextSnapshot = {
+  system: string[]
+  tools: string[]
+  additions: string[]
+  instructionPaths: string[]
+  messageCount: number
+  capturedAt: number
+}
+
+export async function fetchDebugContext(
+  sessionID: string,
+  directory: string,
+  messageID?: string,
+): Promise<DebugContextSnapshot> {
+  const path = `/session/${encodeURIComponent(sessionID)}/debug-context`
+  const url = new URL(withDirectory(path, directory))
+  if (messageID) url.searchParams.set('messageID', messageID)
+  const res = await fetchWithTimeout(url.toString(), {
+    headers: { Authorization: authHeader() },
+  })
+  if (!res.ok) {
+    throw new Error(`debug-context failed (${res.status}): ${await res.text()}`)
+  }
+  return res.json() as Promise<DebugContextSnapshot>
+}
+
 export function eventUrl(directory: string): string {
   return withDirectory('/event', directory)
+}
+
+export type SessionMessagePart = {
+  type?: string
+  text?: string
+  id?: string
+  tool?: string
+  callID?: string
+  state?: Record<string, unknown>
+  time?: { end?: number }
 }
 
 export type SessionMessage = {
@@ -98,8 +169,9 @@ export type SessionMessage = {
     finish?: string
     tokens?: Record<string, unknown>
     time?: { completed?: number }
+    sessionID?: string
   }
-  parts?: Array<{ type?: string; text?: string; id?: string }>
+  parts?: SessionMessagePart[]
 }
 
 export async function fetchSessionMessages(sessionID: string, directory: string): Promise<SessionMessage[]> {

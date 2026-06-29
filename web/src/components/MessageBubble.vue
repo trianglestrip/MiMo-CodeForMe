@@ -5,6 +5,8 @@ import { renderMarkdown, highlightCodeBlocks } from '@/lib/markdown'
 import { yieldToMain } from '@/lib/asyncLocalStorage'
 import { fmtBeijingTime, fmtDuration, fmtTokenCount } from '@/lib/formatTime'
 import { attachmentKind, mimeBadge, resolveMessageAttachments } from '@/lib/composer/attachments'
+import { fetchDebugContext, type DebugContextSnapshot } from '@/lib/mimo/client'
+import { getWorkDir } from '@/lib/workDir'
 import AssistantActivities from '@/components/AssistantActivities.vue'
 import IncompleteNotice from '@/components/IncompleteNotice.vue'
 import SkeletonBlock from '@/components/skeleton/SkeletonBlock.vue'
@@ -14,11 +16,16 @@ const props = defineProps<{
   message: ChatMessage
   showCursor?: boolean
   traceHref?: string
+  sessionId?: string
 }>()
 
 const contentRef = ref<HTMLElement | null>(null)
 const bodyReady = ref(false)
 const renderedContent = ref('')
+const debugOpen = ref(false)
+const debugLoading = ref(false)
+const debugError = ref<string | null>(null)
+const debugSnapshot = ref<DebugContextSnapshot | null>(null)
 
 async function renderBody() {
   await yieldToMain()
@@ -31,6 +38,34 @@ async function syncHighlight() {
   await nextTick()
   if (contentRef.value) highlightCodeBlocks(contentRef.value)
 }
+
+async function openDebugContext() {
+  if (!props.sessionId) {
+    debugError.value = '未关联 MiMo session'
+    debugOpen.value = true
+    return
+  }
+  debugOpen.value = true
+  debugLoading.value = true
+  debugError.value = null
+  debugSnapshot.value = null
+  try {
+    debugSnapshot.value = await fetchDebugContext(
+      props.sessionId,
+      getWorkDir(),
+      props.message.backendMessageId,
+    )
+  } catch (e) {
+    debugError.value = e instanceof Error ? e.message : '加载调试上下文失败'
+  } finally {
+    debugLoading.value = false
+  }
+}
+
+const debugSystemText = computed(() => debugSnapshot.value?.system.join('\n\n') ?? '')
+const debugAdditionsText = computed(() => debugSnapshot.value?.additions.join('\n\n') ?? '')
+const debugToolsText = computed(() => debugSnapshot.value?.tools.join('\n') ?? '')
+const debugPathsText = computed(() => debugSnapshot.value?.instructionPaths.join('\n') ?? '')
 
 onMounted(() => {
   void renderBody()
@@ -59,7 +94,19 @@ const userImageUrls = computed(() =>
       class="user-card"
       shadow="never"
     >
-      <ElText tag="div" type="info" size="small" class="msg-time">{{ fmtBeijingTime(message.createdAt) }}</ElText>
+      <div class="user-card-head">
+        <ElText tag="div" type="info" size="small" class="msg-time">{{ fmtBeijingTime(message.createdAt) }}</ElText>
+        <ElButton
+          v-if="sessionId"
+          class="debug-btn"
+          text
+          size="small"
+          title="查看 LLM 调试上下文"
+          @click="openDebugContext"
+        >
+          🐛
+        </ElButton>
+      </div>
       <div v-if="userAttachments.length" class="msg-attachments">
         <template v-for="file in userAttachments" :key="file.id">
           <ElImage
@@ -131,6 +178,34 @@ const userImageUrls = computed(() =>
       </ElText>
     </div>
   </div>
+
+  <ElDialog v-model="debugOpen" title="LLM 调试上下文" width="720px" destroy-on-close>
+    <div v-if="debugLoading" class="debug-loading">
+      <ElIcon class="is-loading"><Loading /></ElIcon>
+      加载中…
+    </div>
+    <ElAlert v-else-if="debugError" type="warning" :title="debugError" show-icon :closable="false" />
+    <template v-else-if="debugSnapshot">
+      <ElCollapse>
+        <ElCollapseItem title="System Prompt" name="system">
+          <pre class="debug-pre">{{ debugSystemText || '（空）' }}</pre>
+        </ElCollapseItem>
+        <ElCollapseItem title="Instruction Paths" name="paths">
+          <pre class="debug-pre">{{ debugPathsText || '（空）' }}</pre>
+        </ElCollapseItem>
+        <ElCollapseItem title="Additions" name="additions">
+          <pre class="debug-pre">{{ debugAdditionsText || '（空）' }}</pre>
+        </ElCollapseItem>
+        <ElCollapseItem :title="`Tools (${debugSnapshot.tools.length})`" name="tools">
+          <pre class="debug-pre">{{ debugToolsText || '（空）' }}</pre>
+        </ElCollapseItem>
+        <ElCollapseItem title="Meta" name="meta">
+          <pre class="debug-pre">messageCount: {{ debugSnapshot.messageCount }}
+capturedAt: {{ fmtBeijingTime(debugSnapshot.capturedAt) }}</pre>
+        </ElCollapseItem>
+      </ElCollapse>
+    </template>
+  </ElDialog>
 </template>
 
 <style scoped>
@@ -158,8 +233,43 @@ const userImageUrls = computed(() =>
 
 .msg-time {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   text-align: right;
+}
+
+.user-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.debug-btn {
+  opacity: 0.55;
+  padding: 0 4px;
+  min-height: auto;
+}
+
+.user-card:hover .debug-btn {
+  opacity: 1;
+}
+
+.debug-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.debug-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
 }
 
 .user-text {

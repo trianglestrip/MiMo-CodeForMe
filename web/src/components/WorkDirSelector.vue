@@ -52,7 +52,7 @@ function onKeydown(e: KeyboardEvent) {
     <ElForm label-position="top" @submit.prevent="apply">
       <ElFormItem label="工作目录">
         <ElText type="info" size="small" class="desc">
-          Agent 在此目录读写文件（后端 API 的 directory 参数）
+          Agent 在此目录读写文件（后端 API 的 directory 参数）。绿色版需位于 distWebServer 目录内。
         </ElText>
         <ElInput
           v-model="draft"

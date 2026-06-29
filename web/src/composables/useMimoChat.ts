@@ -15,6 +15,7 @@ import {
   resolveDeltaKind,
 } from '@/lib/partPhase'
 import { useChatStore } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
 import { waitTurnEnd } from '@/composables/turn/useTurnLifecycle'
 import type { MessageAttachment } from '@/lib/composer/attachments'
 import type { PollResult } from '@/lib/mimo/poll'
@@ -279,7 +280,11 @@ export async function runTurn(
   turnAcceptUpdates = true
   assistantTextParts.clear()
   partKinds.clear()
-  await promptAsync(sessionID, userContent, directory, attachments)
+  const settings = useSettingsStore()
+  await promptAsync(sessionID, userContent, directory, attachments, {
+    providerID: settings.provider,
+    modelID: settings.model,
+  })
   return waitTurnEnd(sessionID, directory, usersBefore, signal)
 }
 
