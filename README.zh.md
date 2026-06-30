@@ -7,7 +7,7 @@
 <p align="center"><strong>MiMo Code: Where Models and Agents Co-Evolve</strong></p>
 
 <p align="center">
-  中文 | <a href="README.md">English</a>
+  <a href="README.md">Fork 说明</a> | 产品介绍
 </p>
 
 <p align="center">
