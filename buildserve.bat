@@ -11,12 +11,14 @@ set "BUN=%NODE_INSTALL%\bun\bun.exe"
 echo === MiMo-CodeForMe: 打包 mimo serve exe ===
 echo.
 
-call "%NODE_INSTALL%\use-node.bat"
-if errorlevel 1 (
-  echo [ERROR] 找不到 %NODE_INSTALL%\node\node.exe
+set "NODE=%NODE_INSTALL%\node\node.exe"
+set "NPM=%NODE_INSTALL%\node\npm.cmd"
+if not exist "%NODE%" (
+  echo [ERROR] 找不到 %NODE%
   pause
   exit /b 1
 )
+set "PATH=%NODE_INSTALL%\node;%PATH%"
 
 if exist "%BUN%" (
   set "PATH=%NODE_INSTALL%\bun;%PATH%"
