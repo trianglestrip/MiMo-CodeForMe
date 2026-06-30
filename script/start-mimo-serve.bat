@@ -1,10 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
+for %%I in ("%~dp0..") do set "MIMO_REPO=%%~fI"
+cd /d "%MIMO_REPO%"
 
 set "PORT=9000"
 set "HOST=127.0.0.1"
-set "WORK_DIR=%CD%"
+set "WORK_DIR=%MIMO_REPO%"
 
 if not "%~1"=="" set "WORK_DIR=%~1"
 if not "%~2"=="" set "PORT=%~2"
@@ -13,12 +14,12 @@ title MiMo %PORT%
 
 curl -s -u mimocode:mimocode-standalone http://%HOST%:%PORT%/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
-  echo [INFO] MiMo %PORT% 已在运行，跳过启动
+  echo [INFO] MiMo %PORT% ???????У?????????
   pause
   exit /b 0
 )
 
-set "MIMOCODE_HOME=%CD%\.dev-home"
+set "MIMOCODE_HOME=%MIMO_REPO%\.dev-home"
 if not exist "%MIMOCODE_HOME%\data" mkdir "%MIMOCODE_HOME%\data"
 
 set "MIMOCODE_CONFIG=%~dp0standalone\mimo-config.json"
@@ -45,6 +46,7 @@ echo  MiMoCode Serve
 echo    API:      http://%HOST%:%PORT%
 echo    User:     %MIMOCODE_SERVER_USERNAME%
 echo    Password: %MIMOCODE_SERVER_PASSWORD%
+echo    HOME:     %MIMOCODE_HOME%
 echo    Model:    mimo/mimo-auto（可选 deepseek/deepseek-v4-flash、deepseek-v4-pro）
 echo    工作目录: 通过 API 请求参数 directory 指定
 echo.

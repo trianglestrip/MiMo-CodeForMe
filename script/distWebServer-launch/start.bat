@@ -6,7 +6,7 @@ cd /d "%~dp0"
 set "ROOT=%CD%"
 
 if not exist "%ROOT%\server\mimo.exe" (
-  echo [ERROR] 缺少 server\mimo.exe，请先运行 build-mimo.bat
+  echo [ERROR] 缺少 server\mimo.exe，请先运行 buildserve.bat 或 AgentServer\build-mimo.bat
   pause
   exit /b 1
 )
@@ -19,7 +19,7 @@ if not errorlevel 1 (
 )
 
 call "%~dp0stop.bat" /q
-start "MiMo 4096" cmd /k call "%ROOT%\server\run-mimo.bat"
+start "" cmd /k call "%ROOT%\server\run-mimo.bat"
 timeout /t 2 /nobreak >nul
 
 echo [INFO] 等待 MiMo serve ...
