@@ -23,7 +23,13 @@ set "MIMOCODE_HOME=%MIMO_REPO%\.dev-home"
 if not exist "%MIMOCODE_HOME%\data" mkdir "%MIMOCODE_HOME%\data"
 
 set "MIMOCODE_CONFIG=%~dp0standalone\mimo-config.json"
-copy /Y "%~dp0standalone\mimo-auth.json" "%MIMOCODE_HOME%\data\auth.json" >nul
+if not exist "%MIMOCODE_HOME%\data\auth.json" (
+  if exist "%~dp0standalone\mimo-auth.json.example" (
+    copy /Y "%~dp0standalone\mimo-auth.json.example" "%MIMOCODE_HOME%\data\auth.json" >nul
+  ) else if exist "%~dp0standalone\mimo-auth.json" (
+    copy /Y "%~dp0standalone\mimo-auth.json" "%MIMOCODE_HOME%\data\auth.json" >nul
+  )
+)
 set "MIMOCODE_SERVER_PASSWORD=mimocode-standalone"
 set "MIMOCODE_SERVER_USERNAME=mimocode"
 

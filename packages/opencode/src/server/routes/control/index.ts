@@ -11,6 +11,69 @@ import { errors } from "../../error"
 export function ControlPlaneRoutes(): Hono {
   const app = new Hono()
   return app
+    .get(
+      "/auth",
+      describeRoute({
+        summary: "List auth credentials",
+        description: "Retrieve all stored authentication credentials.",
+        operationId: "auth.list",
+        responses: {
+          200: {
+            description: "All auth credentials",
+            content: {
+              "application/json": {
+                schema: resolver(z.record(z.string(), Auth.Info.zod)),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const all = await AppRuntime.runPromise(
+          Effect.gen(function* () {
+            const auth = yield* Auth.Service
+            return yield* auth.all()
+          }),
+        )
+        return c.json(all)
+      },
+    )
+    .get(
+      "/auth/:providerID",
+      describeRoute({
+        summary: "Get auth credentials",
+        description: "Retrieve authentication credentials for a specific provider.",
+        operationId: "auth.get",
+        responses: {
+          200: {
+            description: "Auth credentials",
+            content: {
+              "application/json": {
+                schema: resolver(Auth.Info.zod),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: ProviderID.zod,
+        }),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const info = await AppRuntime.runPromise(
+          Effect.gen(function* () {
+            const auth = yield* Auth.Service
+            return yield* auth.get(providerID)
+          }),
+        )
+        if (!info) return c.json({ error: "Not found" }, 404)
+        return c.json(info)
+      },
+    )
     .put(
       "/auth/:providerID",
       describeRoute({

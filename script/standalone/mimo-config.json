@@ -3,6 +3,7 @@
   "model": "mimo/mimo-auto",
   "small_model": "deepseek/deepseek-v4-flash",
   "disabled_providers": ["opencode", "opencode-go"],
+  "enabled_providers": ["mimo", "xiaomi", "deepseek", "zhipuai", "google", "openai"],
   "provider": {
     "mimo": {
       "name": "MiMo",
@@ -16,6 +17,12 @@
           "limit": { "context": 1000000, "output": 128000 }
         }
       }
+    },
+    "xiaomi": {
+      "name": "MiMo (付费)"
+    },
+    "zhipuai": {
+      "name": "GLM (智谱)"
     },
     "deepseek": {
       "models": {

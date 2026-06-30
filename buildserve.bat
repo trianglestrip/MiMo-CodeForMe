@@ -35,6 +35,13 @@ if errorlevel 1 (
 
 :BunReady
 
+for %%I in ("%~dp0..") do set "AGENT_ROOT=%%~fI\"
+if exist "!AGENT_ROOT!Stop.bat" (
+  echo [INFO] 打包前停止 serve 端口 ...
+  call "!AGENT_ROOT!Stop.bat" /q
+  timeout /t 1 /nobreak >nul
+)
+
 echo 使用 Node: %NODE%
 "%NODE%" --version
 echo 使用 Bun:  %BUN%
@@ -87,9 +94,6 @@ if not exist "%STANDALONE%\mimo-config.json" (
   goto BuildFail
 )
 copy /Y "%STANDALONE%\mimo-config.json" "%OUT%\mimo-config.json" >nul
-if exist "%STANDALONE%\mimo-auth.json" (
-  copy /Y "%STANDALONE%\mimo-auth.json" "%OUT%\mimo-auth.json" >nul
-)
 if exist "%STANDALONE%\mimo-auth.json.example" (
   copy /Y "%STANDALONE%\mimo-auth.json.example" "%OUT%\mimo-auth.json.example" >nul
 )
@@ -109,11 +113,10 @@ echo === 打包完成 ===
 echo   %OUT%\mimo.exe
 echo   distWebServer\start.bat
 echo   %OUT%\mimo-config.json
-echo   %OUT%\mimo-auth.json
 echo   %OUT%\mimo-auth.json.example
 echo.
 echo 启动: distWebServer\start.bat
-echo DeepSeek: 编辑 distWebServer\server\mimo-auth.json 填写 API Key
+echo API Key: 在前端设置 -^> 模型选择 中配置（首次运行从 .example 初始化）
 echo.
 if /i not "%~1"=="nopause" pause
 exit /b 0

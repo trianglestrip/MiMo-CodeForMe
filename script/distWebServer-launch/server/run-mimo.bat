@@ -21,16 +21,11 @@ if not exist "%MIMO_EXE%" (
 
 if not exist "%DIST%\.dev-home\data" mkdir "%DIST%\.dev-home\data"
 
-if not exist "%DIST%\server\mimo-auth.json" (
+if not exist "%DIST%\.dev-home\data\auth.json" (
   if exist "%DIST%\server\mimo-auth.json.example" (
-    copy /Y "%DIST%\server\mimo-auth.json.example" "%DIST%\server\mimo-auth.json" >nul
-    echo [INFO] 已从 mimo-auth.json.example 创建 mimo-auth.json，请填写 DeepSeek API Key
+    copy /Y "%DIST%\server\mimo-auth.json.example" "%DIST%\.dev-home\data\auth.json" >nul
+    echo [INFO] 已从 mimo-auth.json.example 初始化 auth.json
   )
-)
-
-copy /Y "%DIST%\server\mimo-auth.json" "%DIST%\.dev-home\data\auth.json" >nul 2>&1
-if errorlevel 1 (
-  copy /Y "%DIST%\server\mimo-auth.json.example" "%DIST%\.dev-home\data\auth.json" >nul 2>&1
 )
 
 set "MIMOCODE_HOME=%DIST%\.dev-home"
