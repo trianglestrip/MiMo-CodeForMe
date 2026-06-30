@@ -45,8 +45,8 @@ echo  MiMoCode Serve
 echo    API:      http://%HOST%:%PORT%
 echo    User:     %MIMOCODE_SERVER_USERNAME%
 echo    Password: %MIMOCODE_SERVER_PASSWORD%
-echo    Model:    mimo/mimo-auto
-echo    工作目录: 请在 Web 顶部栏设置
+echo    Model:    mimo/mimo-auto（可选 deepseek/deepseek-v4-flash、deepseek-v4-pro）
+echo    工作目录: 通过 API 请求参数 directory 指定
 echo.
 
 cd /d "%WORK_DIR%"

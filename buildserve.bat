@@ -3,7 +3,9 @@ chcp 65001 >nul 2>&1
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "NODE_INSTALL=%~dp0..\NodeInstall"
+if not defined NODE_INSTALL (
+  for %%I in ("%~dp0..") do set "NODE_INSTALL=%%~fI\NodeInstall"
+)
 set "BUN=%NODE_INSTALL%\bun\bun.exe"
 
 echo === MiMo-CodeForMe: 打包 mimo serve exe ===
@@ -76,23 +78,40 @@ if not exist "%OUT%" mkdir "%OUT%"
 copy /Y "!BIN_SRC!" "%OUT%\mimo.exe" >nul
 if errorlevel 1 goto BuildFail
 
-echo [4/4] 补齐 serve 配置模板...
-if not exist "%OUT%\mimo-config.json" (
-  powershell -NoProfile -Command ^
-    "$cfg = @{ '$schema' = 'https://opencode.ai/config.json'; model = 'mimo/mimo-auto'; disabled_providers = @('opencode','opencode-go') } | ConvertTo-Json -Depth 5; Set-Content -Path '%OUT%\mimo-config.json' -Value $cfg -Encoding UTF8"
+echo [4/4] 复制 serve 配置（来自 script\standalone）...
+set "STANDALONE=%~dp0script\standalone"
+if not exist "%STANDALONE%\mimo-config.json" (
+  echo [ERROR] 找不到 %STANDALONE%\mimo-config.json
+  goto BuildFail
 )
-if not exist "%OUT%\mimo-auth.json.example" (
-  powershell -NoProfile -Command ^
-    "$auth = @{ mimo = @{ type = 'api'; key = 'mimo-free' } } | ConvertTo-Json -Depth 5; Set-Content -Path '%OUT%\mimo-auth.json.example' -Value $auth -Encoding UTF8"
+copy /Y "%STANDALONE%\mimo-config.json" "%OUT%\mimo-config.json" >nul
+if exist "%STANDALONE%\mimo-auth.json" (
+  copy /Y "%STANDALONE%\mimo-auth.json" "%OUT%\mimo-auth.json" >nul
 )
+if exist "%STANDALONE%\mimo-auth.json.example" (
+  copy /Y "%STANDALONE%\mimo-auth.json.example" "%OUT%\mimo-auth.json.example" >nul
+)
+if errorlevel 1 goto BuildFail
+
+echo [5/5] 复制 distWebServer 启动脚本 ...
+set "LAUNCH=%~dp0script\distWebServer-launch"
+if not exist "%LAUNCH%\start.bat" (
+  echo [ERROR] 找不到 %LAUNCH%\start.bat
+  goto BuildFail
+)
+xcopy /E /Y /I /Q "%LAUNCH%\*" "%~dp0distWebServer\" >nul
+if errorlevel 1 goto BuildFail
 
 echo.
 echo === 打包完成 ===
 echo   %OUT%\mimo.exe
+echo   distWebServer\start.bat
 echo   %OUT%\mimo-config.json
+echo   %OUT%\mimo-auth.json
 echo   %OUT%\mimo-auth.json.example
 echo.
-echo 启动: 在 AgentServer 根目录运行 start-mimo.bat
+echo 启动: distWebServer\start.bat
+echo DeepSeek: 编辑 distWebServer\server\mimo-auth.json 填写 API Key
 echo.
 if /i not "%~1"=="nopause" pause
 exit /b 0
