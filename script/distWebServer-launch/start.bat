@@ -1,9 +1,12 @@
 @echo off
 chcp 65001 >nul 2>&1
-REM 一键启动 MiMo API（绿色版，无 Web 前端）
+REM Start MiMo API green package (no web UI)
+REM Optional /bg: background in same window (AgentServer start.bat or dev.bat)
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 set "ROOT=%CD%"
+set "BG=0"
+if /i "%~1"=="/bg" set "BG=1"
 
 if not exist "%ROOT%\server\mimo.exe" (
   echo [ERROR] 缺少 server\mimo.exe，请先运行 buildserve.bat 或 AgentServer\build-mimo.bat
@@ -11,7 +14,10 @@ if not exist "%ROOT%\server\mimo.exe" (
   exit /b 1
 )
 
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+if not defined MIMOCODE_SERVER_USERNAME set "MIMOCODE_SERVER_USERNAME=mimocode"
+if not defined MIMOCODE_SERVER_PASSWORD set "MIMOCODE_SERVER_PASSWORD=aiep2024"
+
+curl -s -u "%MIMOCODE_SERVER_USERNAME%:%MIMOCODE_SERVER_PASSWORD%" http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
   echo [INFO] MiMo 4096 已在运行
   echo [OK] API: http://127.0.0.1:4096/
@@ -19,21 +25,25 @@ if not errorlevel 1 (
 )
 
 call "%~dp0stop.bat" /q
-start "" cmd /k call "%ROOT%\server\run-mimo.bat"
-timeout /t 2 /nobreak >nul
+if "!BG!"=="1" (
+  start /B call "%ROOT%\server\run-mimo.bat" /bg
+) else (
+  start "" cmd /k call "%ROOT%\server\run-mimo.bat"
+)
+ping 127.0.0.1 -n 3 >nul
 
 echo [INFO] 等待 MiMo serve ...
 set /a _W=0
 :WaitMimo
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s -u "%MIMOCODE_SERVER_USERNAME%:%MIMOCODE_SERVER_PASSWORD%" http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 goto MimoReady
 set /a _W+=1
 if !_W! GEQ 45 goto MimoFail
-timeout /t 1 /nobreak >nul
+ping 127.0.0.1 -n 2 >nul
 goto WaitMimo
 
 :MimoFail
-echo [WARN] MiMo serve 未就绪，请查看「MiMo 4096」窗口是否有报错
+echo [WARN] MiMo serve 未就绪，请查看 MiMo 4096 窗口或上方日志
 exit /b 1
 
 :MimoReady

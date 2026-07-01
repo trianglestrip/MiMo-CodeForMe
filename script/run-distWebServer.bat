@@ -1,5 +1,5 @@
 @echo off
-REM 从源码目录启动 distWebServer 打包版（委托 run-mimo.bat）
+REM 从源码目录启动 distWebServer 打包版（委托 distWebServer\start.bat）
 setlocal
 cd /d "%~dp0.."
 
@@ -10,5 +10,5 @@ if not exist "distWebServer\server\mimo.exe" (
   exit /b 1
 )
 
-call "distWebServer\server\run-mimo.bat"
+call "distWebServer\start.bat"
 exit /b %ERRORLEVEL%

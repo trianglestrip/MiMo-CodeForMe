@@ -35,12 +35,10 @@ if errorlevel 1 (
 
 :BunReady
 
-for %%I in ("%~dp0..") do set "AGENT_ROOT=%%~fI\"
-if exist "!AGENT_ROOT!Stop.bat" (
-  echo [INFO] 打包前停止 serve 端口 ...
-  call "!AGENT_ROOT!Stop.bat" /q
-  timeout /t 1 /nobreak >nul
-)
+for %%I in ("%~dp0..") do set "AGENT_ROOT=%%~fI"
+echo [INFO] 打包前停止 mimo 进程 ...
+taskkill /F /IM mimo.exe >nul 2>&1
+ping -n 2 127.0.0.1 >nul
 
 echo 使用 Node: %NODE%
 "%NODE%" --version

@@ -1,15 +1,19 @@
 @echo off
 chcp 65001 >nul 2>&1
-REM 启动 mimo serve(4096)；数据目录 distWebServer\.dev-home；cwd = AgentServer 根
+REM mimo serve :4096; data in distWebServer\.dev-home; cwd = AgentServer root
+
+if /i "%~1"=="/bg" set "AIEP_BG=1"
 
 for %%I in ("%~dp0..") do set "DIST=%%~fI"
 for %%I in ("%~dp0..\..\..") do set "AGENT_ROOT=%%~fI"
 set "MIMO_EXE=%DIST%\server\mimo.exe"
+if not defined MIMOCODE_SERVER_USERNAME set "MIMOCODE_SERVER_USERNAME=mimocode"
+if not defined MIMOCODE_SERVER_PASSWORD set "MIMOCODE_SERVER_PASSWORD=aiep2024"
 
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s -u "%MIMOCODE_SERVER_USERNAME%:%MIMOCODE_SERVER_PASSWORD%" http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
   echo [INFO] MiMo 4096 已在运行，跳过启动
-  pause
+  if not defined AIEP_BG pause
   exit /b 0
 )
 
@@ -43,4 +47,4 @@ echo CWD: %CD%
 
 "%MIMO_EXE%" serve --hostname 127.0.0.1 --port 4096
 
-pause
+if not defined AIEP_BG pause
