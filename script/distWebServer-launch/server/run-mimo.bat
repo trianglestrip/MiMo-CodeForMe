@@ -24,6 +24,7 @@ if not exist "%MIMO_EXE%" (
 )
 
 if not exist "%DIST%\.dev-home\data" mkdir "%DIST%\.dev-home\data"
+if not exist "%DIST%\.dev-home\config" mkdir "%DIST%\.dev-home\config"
 
 if not exist "%DIST%\.dev-home\data\auth.json" (
   if exist "%DIST%\server\mimo-auth.json.example" (
