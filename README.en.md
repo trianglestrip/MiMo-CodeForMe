@@ -21,7 +21,6 @@ A self-contained distribution server for running MiMoCode as a backend service:
 - `buildserve.bat` — bundles the app into a deployable `distWebServer/` directory (mimo.exe + config + launch scripts)
 - `script/distWebServer-launch/` — launch scripts (`start.bat`, `stop.bat`, `run-mimo.bat`) for production deployment
 - `script/build-mimo-serve.bat` / `script/run-built-mimo-serve.bat` — build & run pipeline for the compiled server binary
-- `script/run-distWebServer.bat` — quick-launch the dist server from the repo root
 - `script/run-cli.bat` / `script/build-run-cli.bat` — convenience scripts for CLI usage
 - `script/standalone/` — pre-baked config files (`mimo-config.json`, `mimo-auth.json`) for standalone deployment
 
@@ -47,6 +46,13 @@ A self-contained distribution server for running MiMoCode as a backend service:
 ### 5. Web UI removed
 
 - The standalone Vue web UI was removed from this fork; use API-only distWebServer or TUI
+
+### 6. CAD tools (BcAIEP / ZWCAD)
+
+- Skill: `script/distWebServer-launch/.dev-home/config/skill/cad/SKILL.md`
+- Tools: `cad_status`, `cad_capabilities`, `cad_call`, `cad_batch` in `config/tool/cad.ts`
+- Copied to `distWebServer/.dev-home/config/` on build; loaded when MiMo starts
+- Default CAD URL: `http://127.0.0.1:18520` (override with `BCAIEP_URL`)
 
 ---
 
@@ -77,7 +83,7 @@ bun turbo typecheck                 # Type check
 ```bat
 script\start-mimo-serve.bat         # Global mimo CLI, port 9000
 script\run-built-mimo-serve.bat     # Compiled exe from packages/opencode/dist
-script\run-distWebServer.bat        # distWebServer green bundle
+distWebServer\start.bat             # distWebServer green bundle (4096)
 ```
 
 ---

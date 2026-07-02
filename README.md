@@ -21,7 +21,6 @@
 - `buildserve.bat` — 编译 `mimo.exe` 并输出到 `distWebServer/`（含配置与启动脚本）
 - `script/distWebServer-launch/` — 生产部署用启动脚本（`start.bat`、`stop.bat`、`run-mimo.bat`）
 - `script/build-mimo-serve.bat` / `script/run-built-mimo-serve.bat` — 源码编译产物启动（开发用，9000 端口）
-- `script/run-distWebServer.bat` — 从仓库根目录快速启动绿色包
 - `script/run-cli.bat` / `script/build-run-cli.bat` — CLI 便捷脚本
 - `script/standalone/` — 预置配置（`mimo-config.json`、`mimo-auth.json`）
 
@@ -49,6 +48,13 @@
 ### 5. 移除 Web 前端
 
 - 本分支已移除独立 Vue Web UI，仅保留 API 绿色包与 TUI
+
+### 6. CAD 工具（BcAIEP / ZWCAD）
+
+- `script/distWebServer-launch/.dev-home/config/skill/cad/SKILL.md` — Agent 操作 CAD 的指南
+- `script/distWebServer-launch/.dev-home/config/tool/cad.ts` — 四个工具：`cad_status`、`cad_capabilities`、`cad_call`、`cad_batch`
+- 构建时随 `distWebServer-launch` 复制到 `distWebServer/.dev-home/config/`，MiMo 启动后自动加载
+- 默认连接 `http://127.0.0.1:18520`（环境变量 `BCAIEP_URL` 可覆盖）
 
 ---
 
@@ -79,7 +85,7 @@ bun turbo typecheck                 # 类型检查
 ```bat
 script\start-mimo-serve.bat         # 全局 mimo CLI，9000 端口
 script\run-built-mimo-serve.bat     # 使用 packages/opencode/dist 编译产物
-script\run-distWebServer.bat        # 启动 distWebServer 绿色包
+distWebServer\start.bat             # 启动 distWebServer 绿色包（4096）
 ```
 
 ---
