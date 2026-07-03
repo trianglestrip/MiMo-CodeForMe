@@ -403,10 +403,6 @@ const InfoSchema = Schema.Struct({
         description:
           "Max mode (experimental): the 'max' agent runs N parallel reasoning candidates each step, picks the best via a judge call, and executes only the winner.",
       }),
-      dump_context: Schema.optional(Schema.Boolean).annotate({
-        description:
-          "Enable /dump-context and POST /session/:id/dump-context to export assembled inference context (system + messages + tools).",
-      }),
     }),
   ),
   workflow: Schema.optional(

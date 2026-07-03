@@ -148,6 +148,46 @@ describe("parsePath", () => {
   test("legacy <root>/tasks/<id>/ path no longer matches (tasks dropped from Scope)", () => {
     expect(parsePath("/data/memory/tasks/T1/progress.md")).toBeNull()
   })
+
+  test("Windows backslash path: session notes.md", () => {
+    expect(
+      parsePath(
+        "D:\\data\\memory\\sessions\\ses_0e9b1d0c3ffepBkxvumP4LaSaU\\notes.md",
+      ),
+    ).toEqual({
+      scope: "sessions",
+      scope_id: "ses_0e9b1d0c3ffepBkxvumP4LaSaU",
+      type: "free",
+      key: "notes",
+    })
+  })
+
+  test("Windows backslash path: session checkpoint.md", () => {
+    expect(parsePath("D:\\data\\memory\\sessions\\ses_abc\\checkpoint.md")).toEqual({
+      scope: "sessions",
+      scope_id: "ses_abc",
+      type: "checkpoint",
+      key: "checkpoint",
+    })
+  })
+
+  test("Windows backslash path: project MEMORY.md", () => {
+    expect(parsePath("D:\\data\\memory\\projects\\uuid-1\\MEMORY.md")).toEqual({
+      scope: "projects",
+      scope_id: "uuid-1",
+      type: "memory",
+      key: "MEMORY",
+    })
+  })
+
+  test("Windows backslash path: task progress", () => {
+    expect(parsePath("D:\\data\\memory\\sessions\\ses_abc\\tasks\\T1.2\\progress.md")).toEqual({
+      scope: "sessions",
+      scope_id: "ses_abc",
+      type: "progress",
+      key: "tasks/T1.2/progress",
+    })
+  })
 })
 
 describe("buildPath", () => {

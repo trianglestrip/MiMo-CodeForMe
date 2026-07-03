@@ -42,8 +42,15 @@ function detectType(key: string): MemoryType {
   return "free"
 }
 
+/** Normalize separators so regex parsers work on Windows backslash paths. */
+function normalizePathForParsing(absPath: string): string {
+  return absPath.replace(/\\/g, "/")
+}
+
 export function parsePath(absPath: string): MemoryLocator | null {
-  const m = absPath.match(/\/memory\/(global|projects|sessions)(?:\/([^/]+))?\/(.+)\.md$/)
+  const m = normalizePathForParsing(absPath).match(
+    /\/memory\/(global|projects|sessions)(?:\/([^/]+))?\/(.+)\.md$/,
+  )
   if (!m) return null
   const [, scope, idMaybe, keyRaw] = m
   const scope_id = scope === "global" ? "" : (idMaybe ?? "")
@@ -57,7 +64,7 @@ export function parsePath(absPath: string): MemoryLocator | null {
 const CC_PATH_RE = /\/\.claude\/projects\/([^/]+)\/memory\/(.+)\.md$/
 
 export function parseCcPath(absPath: string): MemoryLocator | null {
-  const m = absPath.match(CC_PATH_RE)
+  const m = normalizePathForParsing(absPath).match(CC_PATH_RE)
   if (!m) return null
   const [, slug, keyRaw] = m
   return {
