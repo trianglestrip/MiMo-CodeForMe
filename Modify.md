@@ -114,7 +114,9 @@ TUI 默认模型回退：`packages/opencode/src/cli/cmd/tui/context/local.tsx` �
 
 ## 10. 已知 WARN（预期行为）
 
-- **`@mimo-ai/plugin` npm 安装失败**：prod 打包尝试安装未发布到 npm 的版本；CAD 工具仍从 exe 内置模块加载，功能不受影响。
+- **`@mimo-ai/plugin` npm 安装失败**：prod exe 按上游逻辑用 `InstallationVersion`（`0.0.0-prod-*`）拉 plugin；上游通过 `script/publish.ts` 把 `@mimo-ai/plugin` 以同版本发布到 npm，fork 本地打包未走发布流程，故 npm 无对应版本。
+- `distWebServer` 仅含 exe / 脚本 / 配置，**不预装 `node_modules`**。
+- CAD 工具从 `config/tool/cad.ts` 加载，功能不受影响。
 
 ---
 
