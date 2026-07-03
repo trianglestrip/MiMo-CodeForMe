@@ -22,6 +22,8 @@ import { Effect, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import * as BashInteractive from "./bash-interactive"
+import * as BashTokenEfficient from "./bash_token_efficient_pipeline"
+import * as BashTokenEfficientHeuristic from "./bash_token_efficient_heuristic"
 
 const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.MIMOCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -308,7 +310,8 @@ const ask = Effect.fn("BashTool.ask")(function* (ctx: Tool.Context, scan: Scan) 
 
 function cmd(shell: string, name: string, command: string, cwd: string, env: NodeJS.ProcessEnv) {
   if (process.platform === "win32" && PS.has(name)) {
-    return ChildProcess.make(shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command], {
+    const prefixed = `${Shell.POWERSHELL_UTF8_PREFIX}${command}`
+    return ChildProcess.make(shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", prefixed], {
       cwd,
       env,
       stdin: "ignore",
@@ -316,7 +319,10 @@ function cmd(shell: string, name: string, command: string, cwd: string, env: Nod
     })
   }
 
-  return ChildProcess.make(command, [], {
+  const finalCommand =
+    process.platform === "win32" && name === "cmd" ? `${Shell.CMD_UTF8_PREFIX}${command}` : command
+
+  return ChildProcess.make(finalCommand, [], {
     shell,
     cwd,
     env,
@@ -429,6 +435,10 @@ export const BashTool = Tool.define(
       )
       return {
         ...process.env,
+        // Python ignores the console code page when stdout is a pipe and falls
+        // back to the ANSI code page (GBK on zh-CN), producing mojibake. Force
+        // UTF-8 for child Python processes on Windows.
+        ...(process.platform === "win32" ? { PYTHONIOENCODING: "utf-8" } : {}),
         ...extra.env,
       }
     })
@@ -560,7 +570,42 @@ export const BashTool = Tool.define(
         file = yield* trunc.write(raw)
       }
 
-      let output = end.text
+      // Token-efficient post-cleanse: RTK-style ANSI strip / progress fold /
+      // secret redact / long-line elide. Only applied when no tool storage is
+      // involved — once the output spills to a truncation file, the on-disk
+      // archive stays raw and cleaning is skipped to keep the inline preview
+      // consistent with the archive.
+      const cleaned =
+        !file && Flag.MIMOCODE_EXPERIMENTAL_TOKEN_EFFICIENCY
+          ? BashTokenEfficient.clean(end.text, { command: input.command })
+          : null
+      if (cleaned && cleaned.bytesOut < cleaned.bytesIn) {
+        log.info("bash output cleaned", {
+          bytesIn: cleaned.bytesIn,
+          bytesOut: cleaned.bytesOut,
+          saved: cleaned.bytesIn - cleaned.bytesOut,
+        })
+      }
+
+      // Heuristic (shape-based) pipeline runs AFTER the common pipeline and
+      // only when both flags are on. Same never-worse contract — a shape that
+      // doesn't shrink the bytes is discarded.
+      const heuristic =
+        !file &&
+        Flag.MIMOCODE_EXPERIMENTAL_TOKEN_EFFICIENCY &&
+        Flag.MIMOCODE_EXPERIMENTAL_TOKEN_EFFICIENCY_HEURISTIC
+          ? BashTokenEfficientHeuristic.cleanHeuristic(cleaned?.text ?? end.text, { command: input.command })
+          : null
+      if (heuristic && heuristic.bytesOut < heuristic.bytesIn) {
+        log.info("bash output heuristic cleaned", {
+          shape: heuristic.shape,
+          bytesIn: heuristic.bytesIn,
+          bytesOut: heuristic.bytesOut,
+          saved: heuristic.bytesIn - heuristic.bytesOut,
+        })
+      }
+
+      let output = heuristic?.text ?? cleaned?.text ?? end.text
       if (!output) output = "(no output)"
 
       if (cut && file) {

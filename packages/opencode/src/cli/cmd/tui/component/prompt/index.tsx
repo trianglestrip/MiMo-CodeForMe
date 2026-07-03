@@ -16,7 +16,7 @@ import { MessageID, PartID } from "@/session/schema"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
-import { assign } from "./part"
+import { assign, expandPlaceholders } from "./part"
 import { usePromptStash } from "./stash"
 import { DialogStash } from "../dialog-stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
@@ -994,13 +994,12 @@ export function Prompt(props: PromptProps) {
     },
   ])
 
-  // While the free-model agreement dialog is open, ignore any further submit()
-  // calls. Enter triggers submit twice (the input_submit keybind plus the
-  // textarea's deferred onSubmit), and without this guard the deferred call can
-  // interleave with the post-accept re-submit and drop the user's message.
-  let agreementPending = false
+  // Enter triggers submit twice (the input_submit keybind plus the textarea's
+  // deferred onSubmit). This lock prevents the deferred call from re-entering
+  // while a dialog or async session-creation is in progress.
+  let submitLock = false
   async function submit() {
-    if (agreementPending) return false
+    if (submitLock) return false
     setGhost("")
     // IME: double-defer may fire before onContentChange flushes the last
     // composed character (e.g. Korean hangul) to the store, so read
@@ -1029,16 +1028,14 @@ export function Prompt(props: PromptProps) {
     // policy. Gate submission until the user accepts; the flag is stored in KV.
     const isFreeModel = FREE_MODEL_IDS.has(selectedModel.modelID)
     if (isFreeModel && !kv.get(FREE_AGREEMENT_KEY)) {
-      agreementPending = true
+      submitLock = true
       DialogAgreement.show(dialog, {
         onConfirm: () => {
           kv.set(FREE_AGREEMENT_KEY, true)
           void submit()
         },
-        // Fires on any dismissal (confirm, cancel, esc, click-outside). Reset
-        // the guard here so submission is unblocked once the dialog is gone.
         onClose: () => {
-          agreementPending = false
+          submitLock = false
         },
       })
       return false
@@ -1072,6 +1069,9 @@ export function Prompt(props: PromptProps) {
       return false
     }
 
+    submitLock = true
+    try {
+
     let sessionID = props.sessionID
     if (sessionID == null) {
       const res = await sdk.client.session.create({ workspace: props.workspaceID })
@@ -1091,23 +1091,20 @@ export function Prompt(props: PromptProps) {
     }
 
     const messageID = MessageID.ascending()
-    let inputText = store.prompt.input
 
-    // Expand pasted text inline before submitting
-    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
-    const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
-
-    for (const extmark of sortedExtmarks) {
-      const partIndex = store.extmarkToPartIndex.get(extmark.id)
-      if (partIndex !== undefined) {
+    // Expand pasted text inline before submitting. Extmark offsets are
+    // display-width based while plainText is UTF-16, so expandPlaceholders
+    // bridges the two coordinate systems (otherwise CJK content desyncs them).
+    const marks = input.extmarks
+      .getAllForTypeId(promptPartTypeId)
+      .flatMap((extmark: { id: number; start: number; end: number }) => {
+        const partIndex = store.extmarkToPartIndex.get(extmark.id)
+        if (partIndex === undefined) return []
         const part = store.prompt.parts[partIndex]
-        if (part?.type === "text" && part.text) {
-          const before = inputText.slice(0, extmark.start)
-          const after = inputText.slice(extmark.end)
-          inputText = before + part.text + after
-        }
-      }
-    }
+        if (part?.type !== "text" || !part.text) return []
+        return [{ start: extmark.start, end: extmark.end, text: part.text }]
+      })
+    const inputText = expandPlaceholders(store.prompt.input, marks)
 
     // Filter out text parts (pasted content) since they're now expanded inline
     const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
@@ -1210,6 +1207,10 @@ export function Prompt(props: PromptProps) {
       }, 50)
     input.clear()
     return true
+
+    } finally {
+      submitLock = false
+    }
   }
   const exit = useExit()
 
@@ -1643,9 +1644,12 @@ export function Prompt(props: PromptProps) {
                           >
                             {local.model.parsed().model}
                           </text>
-                          <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>
-                            {currentProviderLabel()}
-                          </text>
+                          {/* Hide provider label for mimo-auto since model name already contains "MiMo" */}
+                          <Show when={!(local.model.current()?.providerID === "mimo" && local.model.current()?.modelID === "mimo-auto")}>
+                            <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>
+                              {currentProviderLabel()}
+                            </text>
+                          </Show>
                           <Show when={showVariant()}>
                             <text fg={fadeColor(theme.textMuted, variantMetaAlpha())}>·</text>
                             <text>

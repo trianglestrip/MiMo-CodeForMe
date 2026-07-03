@@ -1,6 +1,6 @@
 # MiMo-CodeForMe 定制改动说明
 
-> 基于上游 [XiaomiMiMo/MiMo-Code](https://github.com/XiaomiMiMo/MiMo-Code) `main`（共同祖先 `86d95a7`，2026-06-23）  
+> 基于上游 [XiaomiMiMo/MiMo-Code](https://github.com/XiaomiMiMo/MiMo-Code) `main`（已合并 upstream/main，2026-07-03）  
 > README 与上游保持一致；**本文件为 fork 相对上游的唯一差异说明入口**。
 
 ---

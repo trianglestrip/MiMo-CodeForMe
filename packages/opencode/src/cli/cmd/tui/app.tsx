@@ -16,6 +16,7 @@ import {
 } from "solid-js"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { Flag } from "@/flag/flag"
+import { isSystemSession } from "@/session/auto-dream"
 import semver from "semver"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { DialogMimoLogin } from "@tui/component/dialog-mimo-login"
@@ -380,7 +381,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (continued || sync.status === "loading" || !args.continue) return
     const match = sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
-      .find((x) => x.parentID === undefined)?.id
+      .find((x) => x.parentID === undefined && !isSystemSession(x))?.id
     if (match) {
       continued = true
       if (args.fork) {
@@ -1028,6 +1029,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     void (async () => {
       renderer.suspend()
       renderer.currentRenderBuffer.clear()
+      // Clear alternate screen buffer so child processes that enter alt screen
+      // (e.g. Go TUI tools like glab) don't see stale TUI content
+      process.stdout.write("\x1b[?1049h\x1b[2J\x1b[?1049l")
       let exitCode = 1
       let output = ""
       try {

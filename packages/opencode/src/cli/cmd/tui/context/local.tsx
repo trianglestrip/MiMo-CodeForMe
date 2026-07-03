@@ -188,7 +188,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        if (isModelValid({ providerID: "mimo", modelID: "mimo-auto" })) {
+        // No args/config/recent match: prefer the free mimo-auto channel so a
+        // clean install defaults to a usable free model rather than whatever
+        // provider happens to sit first (e.g. paid xiaomi/ultraspeed).
+        const mimo = sync.data.provider.find((p) => p.id === "mimo")
+        if (mimo && "mimo-auto" in mimo.models) {
           return { providerID: "mimo", modelID: "mimo-auto" }
         }
 
@@ -238,7 +242,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const provider = sync.data.provider.find((x) => x.id === value.providerID)
           const info = provider?.models[value.modelID]
           return {
-            provider: t("provider.name." + value.providerID) || provider?.name || value.providerID,
+            provider: provider?.name || value.providerID,
             model:
               value.modelID === "mimo-auto"
                 ? t("tui.model.mimo_auto.name")

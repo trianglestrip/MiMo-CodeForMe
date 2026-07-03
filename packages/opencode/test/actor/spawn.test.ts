@@ -43,6 +43,7 @@ import { Team } from "../../src/team"
 import { SessionCheckpoint } from "../../src/session/checkpoint"
 import { SessionCompaction } from "../../src/session/compaction"
 import { TaskRegistry } from "../../src/task/registry"
+import { defaultLayer as SchedulerDefaultLayer } from "../../src/cron/scheduler"
 import { Auth } from "../../src/auth"
 import { Database } from "../../src/storage"
 import { MessageTable } from "../../src/session/session.sql"
@@ -154,6 +155,7 @@ function makeLayer() {
     Layer.provide(Memory.defaultLayer),
     Layer.provide(History.defaultLayer),
     Layer.provide(TaskRegistry.defaultLayer),
+    Layer.provide(SchedulerDefaultLayer),
     Layer.provide(Auth.defaultLayer),
     Layer.provideMerge(todo),
     Layer.provideMerge(question),
@@ -187,6 +189,7 @@ function makeLayer() {
       Layer.provideMerge(prompt),
       Layer.provideMerge(taskRegistry),
       Layer.provide(TaskRegistry.defaultLayer),
+    Layer.provide(SchedulerDefaultLayer),
       Layer.provide(Inbox.defaultLayer),
     ),
   ).pipe(Layer.provide(summary))
@@ -1023,7 +1026,7 @@ describe("Actor.spawn return-format injection (F21)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        const msgs = yield* session.messages({ sessionID: result.sessionID })
+        const msgs = yield* session.messages({ sessionID: result.sessionID, agentID: "*" })
         const subAgentUser = msgs.find((m) => m.info.role === "user" && m.info.agentID === result.actorID)
         expect(subAgentUser).toBeDefined()
         const text = subAgentUser?.parts.find((p) => p.type === "text")?.text ?? ""
@@ -1060,7 +1063,7 @@ describe("Actor.spawn return-format injection (F21)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        const msgs = yield* session.messages({ sessionID: result.sessionID })
+        const msgs = yield* session.messages({ sessionID: result.sessionID, agentID: "*" })
         const subAgentUser = msgs.find((m) => m.info.role === "user" && m.info.agentID === result.actorID)
         const text = subAgentUser?.parts.find((p) => p.type === "text")?.text ?? ""
         expect(text).not.toContain("Return format (required)")
@@ -1095,7 +1098,7 @@ describe("Actor.spawn return-format injection (F21)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        const msgs = yield* session.messages({ sessionID: result.sessionID })
+        const msgs = yield* session.messages({ sessionID: result.sessionID, agentID: "*" })
         const subAgentUser = msgs.find((m) => m.info.role === "user" && m.info.agentID === result.actorID)
         const text = subAgentUser?.parts.find((p) => p.type === "text")?.text ?? ""
         expect(text).not.toContain("Return format (required)")

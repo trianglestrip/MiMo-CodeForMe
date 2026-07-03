@@ -494,6 +494,13 @@ export type InvalidOutputError = {
   }
 }
 
+export type TextToolCallError = {
+  name: "TextToolCallError"
+  data: {
+    message: string
+  }
+}
+
 export type ContentFilterError = {
   name: "ContentFilterError"
   data: {
@@ -536,6 +543,7 @@ export type EventSessionError = {
       | StructuredOutputError
       | ContextOverflowError
       | InvalidOutputError
+      | TextToolCallError
       | ContentFilterError
       | ModelError
       | ApiError
@@ -966,6 +974,7 @@ export type AssistantMessage = {
     | StructuredOutputError
     | ContextOverflowError
     | InvalidOutputError
+    | TextToolCallError
     | ContentFilterError
     | ModelError
     | ApiError
@@ -1926,6 +1935,19 @@ export type Config = {
      */
     urls?: Array<string>
   }
+  /**
+   * Compose mode configuration
+   */
+  compose?: {
+    /**
+     * Directory where compose skills save specs, plans, and reports. Relative paths are passed to the agent prompt verbatim; set docs_absolute: true to anchor them to the project root. Defaults to docs/compose.
+     */
+    docs?: string
+    /**
+     * Whether the docs directory injected into the compose prompt is an absolute path. When false (default), a relative `docs` value is passed through verbatim. When true, a relative `docs` is resolved against the active worktree root so it is unambiguous regardless of the agent's working directory. Ignored when `docs` is already absolute.
+     */
+    docs_absolute?: boolean
+  }
   watcher?: {
     ignore?: Array<string>
   }
@@ -2171,6 +2193,14 @@ export type Config = {
        * Token cap for §11 Open notes section of checkpoint.md (writer-side budget validation). Default: 800.
        */
       open_notes?: number
+      /**
+       * Token cap for the recent user input section (verbatim user messages from the live DB, FIFO eviction). Default: 16000. Set 0 to disable.
+       */
+      recent_user?: number
+      /**
+       * Per-message cap inside recent user input section; oversized messages get head/tail truncation with messageID elision marker. Default: 2000.
+       */
+      recent_user_per_msg?: number
     }
     /**
      * Number of days after task done/abandoned before it's filtered out of `list({include_archived: false})`. Rows are NOT deleted — see v9 for true GC. Default: 7.
@@ -2813,6 +2843,7 @@ export type Agent = {
   temperature?: number
   color?: string
   permission: PermissionRuleset
+  hardPermission?: PermissionRuleset
   model?: {
     modelID: string
     providerID: string
@@ -4545,7 +4576,7 @@ export type SessionMessagesData = {
     directory?: string
     workspace?: string
     /**
-     * Maximum number of messages to return
+     * Maximum number of messages to return (max 1000)
      */
     limit?: number
     before?: string
@@ -5236,6 +5267,57 @@ export type WorkflowResumeResponses = {
 }
 
 export type WorkflowResumeResponse = WorkflowResumeResponses[keyof WorkflowResumeResponses]
+
+export type WorkflowTranscriptData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/workflows/{runID}/transcript"
+}
+
+export type WorkflowTranscriptResponses = {
+  /**
+   * Full transcript
+   */
+  200: {
+    runID: string
+    transcript: Array<{
+      kind: "phase" | "log"
+      text: string
+    }>
+  }
+}
+
+export type WorkflowTranscriptResponse = WorkflowTranscriptResponses[keyof WorkflowTranscriptResponses]
+
+export type WorkflowStructureData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/workflows/{runID}/structure"
+}
+
+export type WorkflowStructureResponses = {
+  /**
+   * Structure tree
+   */
+  200: {
+    runID: string
+    nodes: Array<unknown>
+  }
+}
+
+export type WorkflowStructureResponse = WorkflowStructureResponses[keyof WorkflowStructureResponses]
 
 export type QuestionListData = {
   body?: never

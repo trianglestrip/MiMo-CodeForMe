@@ -11,7 +11,17 @@ import { Agent } from "../agent/agent"
 import { SYSTEM_SPAWNED_AGENT_TYPES } from "@/agent/config"
 import { Provider } from "../provider"
 import { ModelID, ProviderID } from "../provider/schema"
-import { type Tool as AITool, type ModelMessage, tool, jsonSchema, type ToolExecutionOptions, asSchema } from "ai"
+import {
+  type Tool as AITool,
+  type ModelMessage,
+  tool,
+  jsonSchema,
+  type ToolExecutionOptions,
+  asSchema,
+  generateText,
+  wrapLanguageModel,
+} from "ai"
+import { InstallationVersion } from "@/installation/version"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { SessionPrune } from "./prune"
 import { SessionCheckpoint } from "./checkpoint"
@@ -185,6 +195,7 @@ const PREDICT_NUDGE = `Based on the conversation above, write the user's most li
 
 const OUTPUT_LENGTH_CONTINUATION_LIMIT = Flag.MIMOCODE_OUTPUT_LENGTH_CONTINUATION_LIMIT
 const INVALID_OUTPUT_CONTINUATION_LIMIT = Flag.MIMOCODE_INVALID_OUTPUT_CONTINUATION_LIMIT
+const TEXT_TOOL_CALL_RETRY_LIMIT = Flag.MIMOCODE_TEXT_TOOL_CALL_RETRY_LIMIT
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -430,39 +441,81 @@ export const layer = Layer.effect(
       if (assistants.some((m) => m.info.time.completed === undefined)) return ""
       const lastAssistant = assistants[assistants.length - 1]
 
+      // Context fed to the prediction: up to 3 most recent user queries
+      // (chronological) plus the latest assistant turn (which carries tool
+      // outputs + final assistant text). Earlier assistant turns are dropped
+      // to keep the prompt small.
+      const recentUsers = history.filter(real).slice(-3)
+      const contextMsgs = [...recentUsers, lastAssistant]
+
       const base = yield* agents.get("title")
       if (!base) return ""
-      // Reuse the lightweight title agent's settings but swap its prompt for the
-      // prediction prompt — its default ("output ONLY a thread title") would
-      // otherwise be prepended ahead of PREDICT_SYSTEM and win.
-      const ag = { ...base, prompt: PREDICT_SYSTEM }
-      const mdl = ag.modelRef
-        ? yield* provider.resolveModelRef(ag.modelRef, lastAssistant.info.providerID)
-        : ag.model
-          ? yield* provider.getModel(ag.model.providerID, ag.model.modelID)
+      const mdl = base.modelRef
+        ? yield* provider.resolveModelRef(base.modelRef, lastAssistant.info.providerID)
+        : base.model
+          ? yield* provider.getModel(base.model.providerID, base.model.modelID)
           : ((yield* provider.getSmallModel(lastAssistant.info.providerID)) ??
             (yield* provider.getModel(lastAssistant.info.providerID, lastAssistant.info.modelID)))
 
-      const msgs = yield* MessageV2.toModelMessagesEffect([lastUser, lastAssistant], mdl, { stripMedia: true })
-      const text = yield* llm
-        .stream({
-          agent: ag,
-          user: lastUser.info,
-          system: [],
-          small: true,
-          tools: {},
-          model: mdl,
-          sessionID: input.sessionID,
-          retries: 1,
+      // Side-channel call: bypass llm.stream so prediction stays out of the
+      // session trajectory and never triggers session-coupled plugin hooks
+      // (chat.params, chat.headers, system.transform, memory instructions,
+      // x-session-affinity). Still publishes Metrics.ModelCall so the
+      // prediction cost shows up in analytics.
+      const msgs = yield* MessageV2.toModelMessagesEffect(contextMsgs, mdl, { stripMedia: true })
+      const language = yield* provider.getLanguage(mdl)
+      const wrapped = wrapLanguageModel({
+        model: language,
+        middleware: [
+          {
+            specificationVersion: "v3" as const,
+            async transformParams(args) {
+              if (args.type === "generate" || args.type === "stream") {
+                // @ts-expect-error
+                args.params.prompt = ProviderTransform.message(args.params.prompt, mdl, {})
+              }
+              return args.params
+            },
+          },
+        ],
+      })
+      const started = Date.now()
+      const result = yield* Effect.tryPromise(() =>
+        generateText({
+          model: wrapped,
+          system: PREDICT_SYSTEM,
           messages: [...msgs, { role: "user", content: PREDICT_NUDGE }],
+          maxOutputTokens: ProviderTransform.maxOutputTokens(mdl),
+          temperature: mdl.capabilities.temperature ? 0.7 : undefined,
+          providerOptions: ProviderTransform.providerOptions(mdl, ProviderTransform.smallOptions(mdl)),
+          headers: {
+            ...mdl.headers,
+            "User-Agent": `mimocode/${InstallationVersion}`,
+          },
+          maxRetries: 1,
+        }),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          elog.warn("predict failed", { error: Cause.pretty(cause) }).pipe(Effect.as(undefined)),
+        ),
+      )
+      if (!result) return ""
+
+      const u = Session.getUsage({ model: mdl, usage: result.usage, metadata: result.providerMetadata })
+      yield* bus
+        .publish(Metrics.ModelCall, {
+          sessionID: input.sessionID,
+          finish_reason: result.finishReason,
+          latency_ms: Date.now() - started,
+          cached_read_tokens: u.tokens.cache.read,
+          model_id: mdl.id,
+          provider: mdl.providerID,
+          total_tokens_in: u.tokens.input + u.tokens.cache.read + u.tokens.cache.write,
+          total_tokens_out: u.tokens.output + u.tokens.reasoning,
         })
-        .pipe(
-          Stream.filter((e): e is Extract<LLM.Event, { type: "text-delta" }> => e.type === "text-delta"),
-          Stream.map((e) => e.text),
-          Stream.mkString,
-          Effect.orElseSucceed(() => ""),
-        )
-      const cleaned = text
+        .pipe(Effect.ignore)
+
+      const cleaned = result.text
         .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
         .split("\n")
         .map((line) => line.trim())
@@ -534,7 +587,20 @@ export const layer = Layer.effect(
         sessionID: userMessage.info.sessionID,
         type: "text",
         text: `<system-reminder>
-Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+Plan mode is active. The user wants you to research and design, NOT to execute yet. This supersedes any other instructions you have received.
+
+## What you SHOULD do (recommended)
+- Prefer the dedicated read-only tools for everything they cover — \`read\` (view files), \`grep\` (search contents), \`glob\` (find files), and the \`lsp\` tools (definitions, references, diagnostics). These are the right way to explore the code.
+- Spawn \`explore\`/\`general\` subagents for parallel research.
+- Only when those tools genuinely can't get what you need, you MAY use \`bash\` for the gap — but ONLY for commands you are certain are a pure read with NO side effects (e.g. \`git status\`/\`log\`/\`diff\`, listing dependencies). Do NOT reach for \`bash\` to do what \`read\`/\`grep\`/\`glob\` already do.
+
+## What you MUST NOT do
+- Do NOT edit or create any file other than the plan file below. Writes to non-plan files are blocked outright and will fail — do not attempt them and do not ask the user to approve them.
+- Do NOT run \`test\`, \`lint\`, \`typecheck\`, \`build\`, or similar project commands. These are NOT safe by default: \`lint\` is often configured with \`--fix\`, \`test\` may write snapshots or touch a database, \`build\` writes artifacts, and scripts behind them can do anything. The ONLY exception is if you have explicitly verified — by reading the exact command/config — that this specific invocation has no side effects (no \`--fix\`/\`--write\`, no file/state/db mutation). If you cannot verify that, treat it as forbidden and note it in the plan instead.
+- Do NOT run any other side-effecting \`bash\`: no commits, no \`git push\`, no installing/removing packages, no writing/moving/deleting files, no changing configs, no \`change_directory\`, no \`workflow\`.
+- If you find yourself wanting to mutate something to make progress, that's a signal to write it into the plan instead and continue researching read-only.
+
+Use good judgment: take the read-only action yourself rather than pushing avoidable confirmation prompts onto the user. Only the plan file is writable.
 
 ## Plan File Info:
 ${exists ? `A plan file already exists at ${plan}. You can read it and make incremental edits using the edit tool.` : `No plan file exists yet. You should create your plan at ${plan} using the write tool.`}
@@ -636,6 +702,20 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         return new Set(actor.tools)
       })
       const whitelist = yield* whitelistFor()
+      // Whether a permission ask must be non-interactive (fail clean, never hang):
+      // true for system-spawned actors (checkpoint-writer/dream/distill) AND any
+      // background actor such as compose workflow subagents (spawned as "general"
+      // + background:true). Scoped to THIS permission decision on purpose — not
+      // folded into the shared isSystemSpawned, which also gates memory
+      // instructions and checkpoint self-triggering for user background actors.
+      // Fall back to the agent-name check if the actor row is missing (race /
+      // unregistered) so a system actor can't slip through as interactive.
+      const askActor = input.agentID
+        ? yield* actorRegistry.get(input.session.id, input.agentID)
+        : undefined
+      const askNonInteractive = askActor
+        ? SYSTEM_SPAWNED_AGENT_TYPES.has(askActor.agent) || askActor.background
+        : SYSTEM_SPAWNED_AGENT_TYPES.has(input.agent.name)
       const rejectionFor = (toolID: string) => ({
         title: "Tool not permitted",
         output: `The "${toolID}" tool is not in this actor's whitelist. Allowed tools: ${
@@ -675,10 +755,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 ...req,
                 sessionID: input.session.id,
                 tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-                ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+                ruleset: Agent.runtimePermission(input.agent, input.session.permission),
                 // System-spawned background agents (checkpoint-writer, dream, distill)
-                // have no human to answer a permission prompt — fail clean, don't hang.
-                interactive: !SYSTEM_SPAWNED_AGENT_TYPES.has(input.agent.name),
+                // AND any background actor (e.g. compose workflow subagents) have no
+                // human to answer a permission prompt — fail clean, don't hang.
+                interactive: !askNonInteractive,
               },
               options.abortSignal,
             )
@@ -1016,7 +1097,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               .ask({
                 ...req,
                 sessionID,
-                ruleset: Permission.merge(taskAgent.permission, session.permission ?? []),
+                ruleset: Agent.runtimePermission(taskAgent, session.permission),
               })
               .pipe(Effect.orDie),
         })
@@ -1228,9 +1309,13 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             `,
           ],
         },
-        cmd: { args: ["/c", input.command] },
-        powershell: { args: ["-NoProfile", "-Command", input.command] },
-        pwsh: { args: ["-NoProfile", "-Command", input.command] },
+        cmd: { args: ["/c", `${Shell.CMD_UTF8_PREFIX}${input.command}`] },
+        powershell: {
+          args: ["-NoProfile", "-Command", `${Shell.POWERSHELL_UTF8_PREFIX}${input.command}`],
+        },
+        pwsh: {
+          args: ["-NoProfile", "-Command", `${Shell.POWERSHELL_UTF8_PREFIX}${input.command}`],
+        },
         "": { args: ["-c", input.command] },
       }
 
@@ -1245,7 +1330,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       const cmd = ChildProcess.make(sh, args, {
         cwd,
         extendEnv: true,
-        env: { ...shellEnv.env, TERM: "dumb" },
+        env: {
+          ...shellEnv.env,
+          ...(process.platform === "win32" ? { PYTHONIOENCODING: "utf-8" } : {}),
+          TERM: "dumb",
+        },
         stdin: "ignore",
         forceKillAfter: "3 seconds",
       })
@@ -1804,6 +1893,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         // 与 invalidContinuations（generic invalid）分离，互不污染。局部于 runLoop，
         // 新一轮用户 turn 自动归零。
         let structuredRetries = 0
+        // Bounded retries for text-form tool calls (model wrote a tool call as
+        // prose text instead of a structured tool_use). Local to runLoop so each
+        // fresh user turn starts clean.
+        let textToolCallRetries = 0
         const resolvedAgentID = agentID ?? "main"
         // Tracks plugin-driven cancellation (session.pre OR any session.userQuery.pre)
         // so session.post reports outcome="cancelled" instead of "error".
@@ -2192,6 +2285,69 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           return true
         })
 
+        // Text-form tool call recovery. The model serialized a tool call as prose
+        // text instead of a structured tool_use (a degraded state under large
+        // context). The bad assistant turn is DISCARDED from history by setting
+        // assistant.error (toModelMessages skips a message whose info.error is
+        // set, message-v2.ts), so it can neither strand the conversation on an
+        // assistant turn (provider prefill rejection) nor poison later context.
+        // We then retry the request (caller does `continue`, no new message). On
+        // exhaustion the error stays terminal. Returns true ⇒ continue; false ⇒ break.
+        const autoRetryTextToolCall = Effect.fn("SessionPrompt.autoRetryTextToolCall")(function* (input: {
+          lastUser: MessageV2.User
+          assistant: MessageV2.Assistant
+        }) {
+          // Already discarded on a prior pass — let classify fall through to
+          // `failed` instead of re-detecting and burning another retry.
+          if (input.assistant.error) return false
+          // Discard the bad turn from request history: toModelMessages skips a
+          // message whose info.error is set, so it can neither strand the
+          // conversation on an assistant turn nor poison later context.
+          input.assistant.error = new MessageV2.TextToolCallError({
+            message: "Model emitted a tool call as text instead of a structured tool call.",
+          }).toObject()
+          yield* sessions.updateMessage(input.assistant)
+          if (textToolCallRetries >= TEXT_TOOL_CALL_RETRY_LIMIT) {
+            yield* bus.publish(Session.Event.Error, {
+              sessionID: input.assistant.sessionID,
+              error: input.assistant.error,
+            })
+            return false
+          }
+          textToolCallRetries++
+          yield* slog.info("retrying text-form tool call", { attempt: textToolCallRetries })
+          // Append a synthetic user turn so the discarded assistant becomes stale
+          // (classify staleness guard) AND the loop reaches generation — mirrors
+          // autoRetryStructuredOutput. Without this the loop re-enters, re-detects
+          // the same turn, and burns retries with zero model calls.
+          const msg = yield* sessions.updateMessage({
+            id: MessageID.ascending(),
+            role: "user" as const,
+            sessionID: input.lastUser.sessionID,
+            agentID: input.lastUser.agentID,
+            agent: input.lastUser.agent,
+            model: input.lastUser.model,
+            tools: input.lastUser.tools,
+            format: input.lastUser.format,
+            time: { created: Date.now() },
+          })
+          yield* sessions.updatePart({
+            id: PartID.ascending(),
+            messageID: msg.id,
+            sessionID: msg.sessionID,
+            type: "text",
+            synthetic: true,
+            text: [
+              "<system-reminder>",
+              "Your previous response wrote a tool call as plain text instead of invoking the tool.",
+              "Re-issue it through the real tool channel — emit a structured tool call, not text.",
+              "Do not paste the tool call as text again.",
+              "</system-reminder>",
+            ].join("\n"),
+          } satisfies MessageV2.TextPart)
+          return true
+        })
+
         // json_schema mode but the model never produced structured output (plain
         // text stop, empty, think-only, or any other non-tool terminal). Retry up
         // to lastUser.format.retryCount with a repair nudge; on exhaustion write a
@@ -2435,6 +2591,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               yield* slog.info("exiting loop", { classification: classification.type, reason: classification.reason })
               break
             }
+            if (classification.type === "text-tool-call") {
+              if (yield* autoRetryTextToolCall({ lastUser, assistant: lastAssistant })) continue
+              yield* slog.info("exiting loop", { classification: classification.type })
+              break
+            }
             if (classification.type === "think-only" || classification.type === "invalid") {
               const reason = classification.type === "invalid" ? classification.reason : "think-only"
               if (yield* autoContinueInvalidOutput({ lastUser, assistant: lastAssistant, reason })) continue
@@ -2469,7 +2630,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             // the session layer out of the app-runtime module-init cycle
             // (prompt → app-runtime → AppLayer → SessionPrompt). Only loaded when a
             // trigger actually fires. Detached fire-and-forget on the full runtime.
-            if (dreamTrigger || distillTrigger) {
+            const needAppRuntime = dreamTrigger || distillTrigger || Flag.MIMOCODE_EXPERIMENTAL_CRON
+            if (needAppRuntime) {
               const { AppRuntime } = yield* Effect.promise(() => import("@/effect/app-runtime"))
               if (dreamTrigger) {
                 AppRuntime.runPromise(
@@ -2492,6 +2654,20 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                     }),
                   ),
                 ).catch((err) => log.error("auto-distill prompt failed", { error: String(err) }))
+              }
+              // T18-bridge mount: fire CronBridge.start(sessionID, workspaceRoot)
+              // once per new top-level session boot. The bridge itself no-ops when
+              // MIMOCODE_EXPERIMENTAL_CRON is unset; the outer gate just skips the
+              // resolve cost in the common case. Mirrors auto-dream's detached
+              // dynamic-import pattern so prompt.ts stays out of the app-runtime
+              // module-init cycle. Bridge.start is idempotent via its `started`
+              // guard, and its Layer finalizer handles teardown on scope close.
+              if (Flag.MIMOCODE_EXPERIMENTAL_CRON) {
+                const workspaceRoot = (yield* InstanceState.context).worktree
+                const { CronBridge } = yield* Effect.promise(() => import("@/session/cron-bridge"))
+                AppRuntime.runPromise(
+                  CronBridge.use((b) => b.start(sessionID, workspaceRoot)),
+                ).catch((err) => log.error("cron-bridge start failed", { sessionID, error: String(err) }))
               }
             }
           }
@@ -2522,6 +2698,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               overflow: compactionPart?.overflow,
               agentID: lastUser.agentID,
             })
+            // cron-sentinel cache is invalidated via a SessionCompaction.Event
+            // .Compacted bus subscription inside cron-bridge — see
+            // `compaction.ts:468` publish + `cron-bridge.ts` subscribe pair.
+            // Covers this user-`/compact` path plus the overflow-boundary
+            // path in compaction.create.
             if (result === "stop") break
             continue
           }
@@ -2970,6 +3151,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 yield* writeModelError({ assistant: handle.message, reason: forkClassification.reason })
                 return "break" as const
               }
+              if (forkClassification.type === "text-tool-call") {
+                if (yield* autoRetryTextToolCall({ lastUser, assistant: handle.message })) return "continue" as const
+                return "break" as const
+              }
               if (forkClassification.type !== "continue" && !handle.message.error && format.type === "json_schema") {
                 if (yield* autoRetryStructuredOutput({ lastUser, assistant: handle.message }))
                   return "continue" as const
@@ -3188,6 +3373,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             }
             if (classification.type === "failed") {
               yield* writeModelError({ assistant: handle.message, reason: classification.reason })
+              return "break" as const
+            }
+            if (classification.type === "text-tool-call") {
+              if (yield* autoRetryTextToolCall({ lastUser, assistant: handle.message })) return "continue" as const
               return "break" as const
             }
             if (classification.type !== "continue" && !handle.message.error && format.type === "json_schema") {
@@ -3767,5 +3956,58 @@ const bashRegex = /!`([^`]+)`/g
 const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
 const placeholderRegex = /\$(\d+)/g
 const quoteTrimRegex = /^["']|["']$/g
+
+/**
+ * Fire seam for scheduled prompts (T18, spec [S5]).
+ *
+ * Funnels a cron/loop fire through the SAME entry point typed user prompts use:
+ * `SessionPrompt.Service.prompt`. The synthetic part carries `synthetic: true`
+ * (mimocode convention for `isMeta`) so transcript-preview surfaces can hide it,
+ * and `metadata.origin = { kind: "cron", taskId, kindOfTask }` so the TUI can
+ * render a clock icon. Sentinel expansion is intentionally NOT done here — T19
+ * will wrap `value` before this call.
+ */
+export type ScheduledPromptOrigin = {
+  kind: "cron"
+  taskId: string
+  kindOfTask: "cron" | "loop"
+  /**
+   * ISO-8601 timestamp of when the scheduler tick fired this task. Set by the
+   * cron bridge in `onFire`; persisted on the synthetic part's metadata so the
+   * TUI and downstream consumers can recover fire time without parsing the
+   * prepended text prefix.
+   */
+  firedAt?: string
+}
+
+export type InjectScheduledPromptInput = {
+  sessionID: SessionID
+  value: string
+  origin: ScheduledPromptOrigin
+  priority?: "later" | "next" | "now"
+  isMeta?: boolean
+}
+
+export const injectScheduledPrompt = (input: InjectScheduledPromptInput) =>
+  Effect.gen(function* () {
+    const sp = yield* Service
+    yield* Effect.asVoid(
+      sp.prompt({
+        sessionID: input.sessionID,
+        source: "hook",
+        parts: [
+          {
+            type: "text",
+            text: input.value,
+            synthetic: input.isMeta ?? true,
+            metadata: {
+              origin: input.origin,
+              priority: input.priority ?? "later",
+            },
+          },
+        ],
+      }),
+    )
+  })
 
 export * as SessionPrompt from "./prompt"
