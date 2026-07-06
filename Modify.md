@@ -91,6 +91,12 @@ TUI 默认模型回退：`packages/opencode/src/cli/cmd/tui/context/local.tsx` �
 - 修复：匹配前将 `\` 归一化为 `/`
 - 测试：`packages/opencode/test/memory/paths.test.ts`、`cc-paths.test.ts`
 
+**Monorepo 子目录 snapshot**：`packages/opencode/src/snapshot/index.ts`
+
+- 问题：项目 `directory` 为 git worktree 子目录（如 AgentServer 的 `WebPage/`）时，`diff-files` 返回 worktree 相对路径（`WebPage/package.json`），但 `git add`/`check-ignore` 的 cwd 为子目录，pathspec 不匹配 → `exitCode=128` WARN
+- 修复：`stage`/`drop`/`ignore` 与大文件 `stat` 统一以 `state.worktree` 为基准
+- 测试：`packages/opencode/test/snapshot/snapshot.test.ts` — `tracks files when project directory is a subdirectory of git worktree`
+
 ---
 
 ## 8. 构建配置

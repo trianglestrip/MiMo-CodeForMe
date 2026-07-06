@@ -45,6 +45,32 @@ function run<A>(dir: string, body: (snapshot: Snapshot.Interface) => Effect.Effe
   )
 }
 
+test(
+  "tracks files when project directory is a subdirectory of git worktree",
+  async () => {
+    await using tmp = await bootstrap()
+    const subdir = path.join(tmp.path, "WebPage")
+    await fs.mkdir(subdir, { recursive: true })
+    await Filesystem.write(path.join(subdir, "package.json"), "{}")
+    await $`git add .`.cwd(tmp.path).quiet()
+    await $`git commit -m "add webpage"`.cwd(tmp.path).quiet()
+
+    await Instance.provide({
+      directory: subdir,
+      fn: async () => {
+        const before = await run(subdir, (snapshot) => snapshot.track())
+        expect(before).toBeTruthy()
+
+        await Filesystem.write(path.join(subdir, "index.ts"), "export {}")
+
+        const patch = await run(subdir, (snapshot) => snapshot.patch(before!))
+        expect(patch.files).toContain(fwd(subdir, "index.ts"))
+      },
+    })
+  },
+  { timeout: 30_000 },
+)
+
 test("tracks deleted files correctly", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({

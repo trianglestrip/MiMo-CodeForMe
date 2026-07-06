@@ -89,6 +89,21 @@ export const layer: Layer.Layer<
 
         const args = (cmd: string[]) => ["--git-dir", state.gitdir, "--work-tree", state.worktree, ...cmd]
 
+        // diff-files may return paths relative to directory or worktree when
+        // directory is a subdirectory (monorepo). Normalize to worktree-relative
+        // paths and run pathspec git commands from the worktree root.
+        const worktreeRel = path.relative(state.worktree, state.directory).replaceAll("\\", "/")
+        const scopedSubdir = worktreeRel !== "" && worktreeRel !== "."
+        const normalizePath = (item: string) => {
+          const norm = item.replaceAll("\\", "/")
+          if (!scopedSubdir) return norm
+          if (norm === worktreeRel || norm.startsWith(`${worktreeRel}/`)) return norm
+          return `${worktreeRel}/${norm}`
+        }
+        const pathspecCwd = scopedSubdir ? state.worktree : state.directory
+        const fileOnDisk = (item: string) => path.join(state.worktree, normalizePath(item))
+        const feedPaths = (list: string[]) => feed(list.map(normalizePath))
+
         const enc = new TextEncoder()
         const feed = (list: string[]) => Stream.make(enc.encode(list.join("\0") + "\0"))
 
@@ -136,8 +151,8 @@ export const layer: Layer.Layer<
               "-z",
             ],
             {
-              cwd: state.directory,
-              stdin: feed(files),
+              cwd: pathspecCwd,
+              stdin: feedPaths(files),
             },
           )
           if (check.code !== 0 && check.code !== 1) return new Set<string>()
@@ -152,8 +167,8 @@ export const layer: Layer.Layer<
               ...args(["rm", "--cached", "-f", "--ignore-unmatch", "--pathspec-from-file=-", "--pathspec-file-nul"]),
             ],
             {
-              cwd: state.directory,
-              stdin: feed(files),
+              cwd: pathspecCwd,
+              stdin: feedPaths(files),
             },
           )
         })
@@ -163,8 +178,8 @@ export const layer: Layer.Layer<
           const result = yield* git(
             [...cfg, ...args(["add", "--all", "--sparse", "--pathspec-from-file=-", "--pathspec-file-nul"])],
             {
-              cwd: state.directory,
-              stdin: feed(files),
+              cwd: pathspecCwd,
+              stdin: feedPaths(files),
             },
           )
           if (result.code === 0) return
@@ -232,7 +247,7 @@ export const layer: Layer.Layer<
 
           const tracked = diff.text.split("\0").filter(Boolean)
           const untracked = other.text.split("\0").filter(Boolean)
-          const all = Array.from(new Set([...tracked, ...untracked]))
+          const all = Array.from(new Set([...tracked, ...untracked].map(normalizePath)))
           if (!all.length) return
 
           // Resolve source-repo ignore rules against the exact candidate set.
@@ -253,7 +268,7 @@ export const layer: Layer.Layer<
             (yield* Effect.all(
               allow.map((item) =>
                 fs
-                  .stat(path.join(state.directory, item))
+                  .stat(fileOnDisk(item))
                   .pipe(Effect.catch(() => Effect.void))
                   .pipe(
                     Effect.map((stat) => {
@@ -266,7 +281,7 @@ export const layer: Layer.Layer<
               { concurrency: 8 },
             )).filter((item): item is string => Boolean(item)),
           )
-          const block = new Set(untracked.filter((item) => large.has(item)))
+          const block = new Set(untracked.map(normalizePath).filter((item) => large.has(item)))
           yield* sync(Array.from(block))
           // Stage only the allowed candidate paths so snapshot updates stay scoped.
           yield* stage(allow.filter((item) => !block.has(item)))
