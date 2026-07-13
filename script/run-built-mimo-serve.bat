@@ -16,7 +16,7 @@ if not exist "%MIMO_BIN%" (
   exit /b 1
 )
 
-curl -s -u mimocode:mimocode-standalone http://%HOST%:%PORT%/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s http://%HOST%:%PORT%/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
   echo [INFO] MiMo %PORT% 已在运行
   exit /b 0
@@ -33,8 +33,7 @@ if not exist "%MIMOCODE_HOME%\data\auth.json" (
     copy /Y "%MIMO_REPO%\script\standalone\mimo-auth.json" "%MIMOCODE_HOME%\data\auth.json" >nul
   )
 )
-set "MIMOCODE_SERVER_USERNAME=mimocode"
-set "MIMOCODE_SERVER_PASSWORD=mimocode-standalone"
+REM 无密码模式
 
 for /f "tokens=5" %%A in ('netstat -ano 2^>nul ^| findstr ":%PORT%" ^| findstr "LISTENING"') do taskkill /F /PID %%A >nul 2>&1
 timeout /t 1 /nobreak >nul
