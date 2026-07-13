@@ -12,9 +12,9 @@ if not "%~2"=="" set "PORT=%~2"
 
 title MiMo %PORT%
 
-curl -s -u mimocode:mimocode-standalone http://%HOST%:%PORT%/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s http://%HOST%:%PORT%/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
-  echo [INFO] MiMo %PORT% ???????§µ?????????
+  echo [INFO] MiMo %PORT% ???????ï¿½ï¿½?????????
   pause
   exit /b 0
 )
@@ -30,8 +30,7 @@ if not exist "%MIMOCODE_HOME%\data\auth.json" (
     copy /Y "%~dp0standalone\mimo-auth.json" "%MIMOCODE_HOME%\data\auth.json" >nul
   )
 )
-set "MIMOCODE_SERVER_PASSWORD=mimocode-standalone"
-set "MIMOCODE_SERVER_USERNAME=mimocode"
+REM æ— å¯†ç æ¨¡å¼
 
 where mimo >nul 2>&1
 if errorlevel 1 (
@@ -50,11 +49,7 @@ if errorlevel 1 (
 echo.
 echo  MiMoCode Serve
 echo    API:      http://%HOST%:%PORT%
-echo    User:     %MIMOCODE_SERVER_USERNAME%
-echo    Password: %MIMOCODE_SERVER_PASSWORD%
 echo    HOME:     %MIMOCODE_HOME%
-echo    Model:    mimo/mimo-auto£¨¿ÉÑ¡ deepseek/deepseek-v4-flash¡¢deepseek-v4-pro£©
-echo    ¹¤×÷Ä¿Â¼: Í¨¹ý API ÇëÇó²ÎÊý directory Ö¸¶¨
 echo.
 
 cd /d "%WORK_DIR%"
