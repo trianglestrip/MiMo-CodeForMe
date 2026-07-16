@@ -1,6 +1,6 @@
 import { tool } from "@mimo-ai/plugin"
 
-const CAD_BASE_URL = process.env.BCAIEP_URL || "http://127.0.0.1:18520"
+const CAD_BASE_URL = process.env.BCAIEP_URL || "http://127.0.0.1:9810"
 const CAD_TIMEOUT_MS = 30_000
 
 async function cadFetch(path: string, options?: RequestInit): Promise<Response> {
@@ -19,7 +19,7 @@ async function cadFetch(path: string, options?: RequestInit): Promise<Response> 
 
 export const call = tool({
   description: [
-    "Execute a single CAD command on the BcAIEP service.",
+    "Execute a single CAD command on the BCPD_AI service.",
     "Use GET /api/capabilities first (via cad_capabilities) to discover available methods and their parameter schemas.",
     "The command runs synchronously; write operations are queued to the CAD main thread (15s timeout).",
     "",

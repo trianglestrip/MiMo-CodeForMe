@@ -1,15 +1,15 @@
 ---
 name: cad
-description: Use when the user asks to draw, modify, query, or analyze CAD entities in BcAIEP (ZWCAD). This skill teaches how to call the CAD service HTTP API via the cad_* tools.
+description: Use when the user asks to draw, modify, query, or analyze CAD entities in BCPD_AI (ZWCAD). This skill teaches how to call the CAD service HTTP API via the cad_* tools.
 ---
 
-# CAD 服务操作指南 (BcAIEP)
+# CAD 服务操作指南 (BCPD_AI)
 
 ## 概述
 
-BcAIEP 是运行在 ZWCAD 中的 AI 辅助插件，通过 HTTP API 暴露 CAD 操作。你可以通过 `cad_call`、`cad_batch`、`cad_capabilities`、`cad_status` 四个工具与之交互。
+BCPD_AI 是运行在 ZWCAD 中的 AI 辅助插件，通过 HTTP API 暴露 CAD 操作。你可以通过 `cad_call`、`cad_batch`、`cad_capabilities`、`cad_status` 四个工具与之交互。
 
-**服务地址：** `http://127.0.0.1:18520`
+**服务地址：** `http://127.0.0.1:9810`
 
 ## 可用工具
 
