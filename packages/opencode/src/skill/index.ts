@@ -246,35 +246,38 @@ export const layer = Layer.effect(
     const config = yield* Config.Service
     const bus = yield* Bus.Service
     const fsys = yield* AppFileSystem.Service
-    const discovered = yield* InstanceState.make(
-      Effect.fn("Skill.discovery")(function* (ctx) {
-        return yield* discoverSkills(config, discovery, fsys, ctx.directory, ctx.worktree)
-      }),
-    )
-    const state = yield* InstanceState.make(
-      Effect.fn("Skill.state")(function* (ctx) {
+    const computeState = () =>
+      Effect.gen(function* () {
+        const ctx = yield* InstanceState.context
+        const disc = yield* discoverSkills(config, discovery, fsys, ctx.directory, ctx.worktree)
         const s: State = { skills: {}, dirs: new Set() }
-        yield* loadSkills(s, yield* InstanceState.get(discovered), bus)
+        yield* loadSkills(s, { matches: disc.matches, dirs: disc.dirs }, bus)
         return s
-      }),
-    )
+      })
+
+    const computeDiscovered = () =>
+      Effect.gen(function* () {
+        const ctx = yield* InstanceState.context
+        return yield* discoverSkills(config, discovery, fsys, ctx.directory, ctx.worktree)
+      })
 
     const get = Effect.fn("Skill.get")(function* (name: string) {
-      const s = yield* InstanceState.get(state)
+      const s = yield* computeState()
       return s.skills[name]
     })
 
     const all = Effect.fn("Skill.all")(function* () {
-      const s = yield* InstanceState.get(state)
+      const s = yield* computeState()
       return Object.values(s.skills)
     })
 
     const dirs = Effect.fn("Skill.dirs")(function* () {
-      return (yield* InstanceState.get(discovered)).dirs
+      const disc = yield* computeDiscovered()
+      return disc.dirs
     })
 
     const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-      const s = yield* InstanceState.get(state)
+      const s = yield* computeState()
       let list: Info[] = Object.values(s.skills)
         .filter((sk) => !sk.hidden)
 
@@ -284,8 +287,7 @@ export const layer = Layer.effect(
     })
 
     const reload = Effect.fn("Skill.reload")(function* () {
-      yield* InstanceState.invalidate(discovered)
-      yield* InstanceState.invalidate(state)
+      // No-op: state is always computed fresh on each access; kept for interface compatibility
     })
 
     return Service.of({ get, all, dirs, available, reload })
