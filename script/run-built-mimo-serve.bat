@@ -25,7 +25,11 @@ if not errorlevel 1 (
 set "MIMOCODE_HOME=%MIMO_REPO%\.dev-home"
 if not exist "%MIMOCODE_HOME%\data" mkdir "%MIMOCODE_HOME%\data"
 
-set "MIMOCODE_CONFIG=%MIMO_REPO%\script\standalone\mimo-config.json"
+if exist "%MIMO_REPO%\script\standalone\mimo-config.local.json" (
+  set "MIMOCODE_CONFIG=%MIMO_REPO%\script\standalone\mimo-config.local.json"
+) else (
+  set "MIMOCODE_CONFIG=%MIMO_REPO%\script\standalone\mimo-config.json"
+)
 if not exist "%MIMOCODE_HOME%\data\auth.json" (
   if exist "%MIMO_REPO%\script\standalone\mimo-auth.json.example" (
     copy /Y "%MIMO_REPO%\script\standalone\mimo-auth.json.example" "%MIMOCODE_HOME%\data\auth.json" >nul

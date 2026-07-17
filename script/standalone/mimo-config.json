@@ -1,3 +1,5 @@
 {
-  "disabled_providers": ["mimo"]
+  "$schema": "https://opencode.ai/config.json",
+  "disabled_providers": ["mimo"],
+  "provider": {}
 }

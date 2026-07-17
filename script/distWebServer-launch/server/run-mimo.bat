@@ -32,7 +32,11 @@ if not exist "%DIST%\.dev-home\data\auth.json" (
 )
 
 set "MIMOCODE_HOME=%DIST%\.dev-home"
-set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.json"
+if exist "%DIST%\server\mimo-config.local.json" (
+  set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.local.json"
+) else (
+  set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.json"
+)
 set "MIMOCODE_MIMO_ONLY=true"
 set "MIMOCODE_DISABLE_EXTERNAL_SKILLS=true"
 set "MIMOCODE_DISABLE_PROJECT_CONFIG=true"
