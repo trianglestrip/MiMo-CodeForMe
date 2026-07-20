@@ -32,8 +32,8 @@ if not exist "%DIST%\.dev-home\data\auth.json" (
 )
 
 set "MIMOCODE_HOME=%DIST%\.dev-home"
-if exist "%DIST%\server\mimo-config.local.json" (
-  set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.local.json"
+if exist "%DIST%\server\mimo-config.user.json" (
+  set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.user.json"
 ) else (
   set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.json"
 )

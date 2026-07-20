@@ -22,8 +22,8 @@ if not errorlevel 1 (
 set "MIMOCODE_HOME=%MIMO_REPO%\.dev-home"
 if not exist "%MIMOCODE_HOME%\data" mkdir "%MIMOCODE_HOME%\data"
 
-if exist "%~dp0standalone\mimo-config.local.json" (
-  set "MIMOCODE_CONFIG=%~dp0standalone\mimo-config.local.json"
+if exist "%~dp0standalone\mimo-config.user.json" (
+  set "MIMOCODE_CONFIG=%~dp0standalone\mimo-config.user.json"
 ) else (
   set "MIMOCODE_CONFIG=%~dp0standalone\mimo-config.json"
 )

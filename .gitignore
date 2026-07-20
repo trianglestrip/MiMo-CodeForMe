@@ -39,7 +39,9 @@ tsconfig.tsbuildinfo
 # 本地鉴权（含真实 Key），仅保留 .example 进 git
 /script/standalone/mimo-auth.json
 /script/standalone/mimo-config.local.json
+/script/standalone/mimo-config.user.json
 **/mimo-config.local.json
+**/mimo-config.user.json
 
 # Local agent harness state
 .claude/
