@@ -77,8 +77,6 @@ if not exist "%LAUNCH%\start.bat" (
   goto BuildFail
 )
 copy /Y "%STANDALONE%\mimo-config.json" "%OUT%\mimo-config.json" >nul
-if exist "%STANDALONE%\mimo-config.user.json" copy /Y "%STANDALONE%\mimo-config.user.json" "%OUT%\mimo-config.user.json" >nul
-if exist "%STANDALONE%\mimo-auth.json.example" copy /Y "%STANDALONE%\mimo-auth.json.example" "%OUT%\mimo-auth.json.example" >nul
 xcopy /E /Y /I /Q "%LAUNCH%\*" "%~dp0distWebServer\" >nul
 if errorlevel 1 goto BuildFail
 
