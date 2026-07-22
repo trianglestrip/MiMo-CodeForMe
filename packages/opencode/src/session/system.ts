@@ -14,6 +14,7 @@ import PROMPT_DEEPSEEK from "./prompt/deepseek.txt"
 import PROMPT_GLM from "./prompt/glm.txt"
 import PROMPT_MINIMAX from "./prompt/minimax.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
+import PROMPT_XIAOBO from "./prompt/xiaobo.txt"
 import type { Provider } from "@/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -71,6 +72,7 @@ export const layer = Layer.effect(
             `</env>`,
           ].join("\n"),
           `IMPORTANT: Your response must ALWAYS strictly follow the same major language as the user.`,
+          PROMPT_XIAOBO,
         ]
       },
 

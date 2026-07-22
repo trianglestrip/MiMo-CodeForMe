@@ -1,5 +1,17 @@
 import { MessageID, SessionID } from "./schema"
 
+export type ToolSchemaInfo = {
+  id: string
+  description: string
+  parameters?: unknown
+}
+
+export type ModelMessageInfo = {
+  role: string
+  content: string
+  truncated: boolean
+}
+
 export type DebugCaptureSnapshot = {
   system: string[]
   tools: string[]
@@ -7,6 +19,11 @@ export type DebugCaptureSnapshot = {
   instructionPaths: string[]
   messageCount: number
   capturedAt: number
+  modelMessages: ModelMessageInfo[]
+  toolSchemas: ToolSchemaInfo[]
+  agent: string
+  model: { providerID: string; modelID: string }
+  agentOptions: { temperature?: number; topP?: number; topK?: number; maxOutputTokens?: number }
 }
 
 type SessionEntry = {

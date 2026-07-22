@@ -837,6 +837,27 @@ export const SessionRoutes = lazy(() =>
                     instructionPaths: z.array(z.string()),
                     messageCount: z.number(),
                     capturedAt: z.number(),
+                    modelMessages: z.array(z.object({
+                      role: z.string(),
+                      content: z.string(),
+                      truncated: z.boolean(),
+                    })).optional(),
+                    toolSchemas: z.array(z.object({
+                      id: z.string(),
+                      description: z.string(),
+                      parameters: z.unknown().optional(),
+                    })).optional(),
+                    agent: z.string().optional(),
+                    model: z.object({
+                      providerID: z.string(),
+                      modelID: z.string(),
+                    }).optional(),
+    agentOptions: z.object({
+      temperature: z.number().optional(),
+      topP: z.number().optional(),
+      topK: z.number().optional(),
+      maxOutputTokens: z.number().optional(),
+    }).optional(),
                   }),
                 ),
               },
