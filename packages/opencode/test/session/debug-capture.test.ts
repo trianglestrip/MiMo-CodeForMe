@@ -13,6 +13,11 @@ const payload = {
   additions: ["add"],
   instructionPaths: ["/AGENTS.md"],
   messageCount: 3,
+  modelMessages: [],
+  toolSchemas: [],
+  agent: "build",
+  model: { providerID: "test", modelID: "test-model" },
+  agentOptions: {},
 }
 
 test("capture and get by messageID", () => {

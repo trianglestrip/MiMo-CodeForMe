@@ -3224,7 +3224,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             // task creates, etc.) so each step doesn't replay from the bare
             // user prompt. The watermark is for fork capture only (frozen
             // snapshot of parent-view at spawn time).
-            const { system: prebuiltSystem, inheritedMessages: modelMsgs } =
+            const { system: prebuiltSystem, inheritedMessages: modelMsgs, debugToolDefs } =
               yield* buildLLMRequestPrefix({
                 sessionID,
                 agent,
@@ -3243,6 +3243,26 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               additions,
               instructionPaths,
               messageCount: modelMsgs.length,
+              modelMessages: modelMsgs.map((msg) => {
+                const json = JSON.stringify(msg)
+                const maxLen = 8000
+                return {
+                  role: msg.role,
+                  content: json.length > maxLen ? json.slice(0, maxLen) : json,
+                  truncated: json.length > maxLen,
+                }
+              }),
+              toolSchemas: debugToolDefs ?? [],
+              agent: agent.name,
+              model: { providerID: model.providerID, modelID: model.api.id },
+              agentOptions: {
+                temperature: model.capabilities?.temperature
+                  ? (agent.temperature ?? ProviderTransform.temperature(model))
+                  : undefined,
+                topP: agent.topP ?? ProviderTransform.topP(model),
+                topK: ProviderTransform.topK(model),
+                maxOutputTokens: ProviderTransform.maxOutputTokens(model),
+              },
             })
             const maxModeCfg = (yield* config.get()).experimental?.maxMode
             const useMaxMode =

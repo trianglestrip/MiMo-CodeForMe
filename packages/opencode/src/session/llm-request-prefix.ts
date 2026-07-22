@@ -70,13 +70,15 @@ export const buildLLMRequestPrefix = Effect.fn("Session.buildLLMRequestPrefix")(
     agent: input.agent,
   })
   const tools: Record<string, AITool> = {}
+  const debugToolDefs: { id: string; description: string; parameters?: unknown }[] = []
   for (const item of toolDefs) {
     const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
     tools[item.id] = tool({
       description: item.description,
       inputSchema: jsonSchema(schema),
     })
+    debugToolDefs.push({ id: item.id, description: item.description, parameters: schema })
   }
 
-  return { system, tools, inheritedMessages }
+  return { system, tools, inheritedMessages, debugToolDefs }
 })
