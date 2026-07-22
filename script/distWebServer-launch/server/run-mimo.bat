@@ -37,6 +37,8 @@ if exist "%DIST%\server\mimo-config.user.json" (
 ) else (
   set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.json"
 )
+REM Prepend bundled tools dir to PATH so ripgrep (rg.exe) is found without download
+set "PATH=%~dp0tools;%PATH%"
 set "MIMOCODE_MIMO_ONLY=true"
 set "MIMOCODE_DISABLE_EXTERNAL_SKILLS=true"
 set "MIMOCODE_DISABLE_PROJECT_CONFIG=true"
