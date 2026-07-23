@@ -728,9 +728,9 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       partID: PartID
       field: string
       delta: string
-    }) {
-      yield* bus.publish(MessageV2.Event.PartDelta, input)
-    })
+     }) {
+       yield* bus.publish(MessageV2.Event.PartDelta, input)
+     })
 
     /** Finds the first message matching the predicate, searching newest-first.
      *
