@@ -37,6 +37,7 @@ set "PKG=packages\opencode"
 set "OUT=distWebServer\server"
 set "BIN_SRC="
 
+
 echo [1/4] bun install ...
 "%BUN%" install
 if errorlevel 1 goto BuildFail
@@ -44,19 +45,19 @@ if errorlevel 1 goto BuildFail
 echo [2/4] 编译 mimo.exe ...
 cd /d "%~dp0%PKG%"
 set "MIMOCODE_CHANNEL=prod"
-"%BUN%" run script/build.ts --single
+"%BUN%" --use-system-ca run script/build.ts --single --baseline
 if errorlevel 1 (
   cd /d "%~dp0"
   goto BuildFail
 )
 cd /d "%~dp0"
 
-for /d %%D in ("%PKG%\dist\mimocode-windows-*") do (
+for /d %%D in ("%PKG%\dist\mimocode-windows-x64-baseline") do (
   if exist "%%D\bin\mimo.exe" set "BIN_SRC=%%D\bin\mimo.exe"
   if not defined BIN_SRC if exist "%%D\bin\mimo" set "BIN_SRC=%%D\bin\mimo"
 )
 if not defined BIN_SRC (
-  echo [ERROR] 找不到 %PKG%\dist\mimocode-windows-*\bin\mimo[.exe]
+  echo [ERROR] 找不到 %PKG%\dist\mimocode-windows-x64-baseline\bin\mimo[.exe]
   goto BuildFail
 )
 
