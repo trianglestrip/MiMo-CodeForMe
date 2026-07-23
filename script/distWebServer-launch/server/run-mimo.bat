@@ -32,6 +32,8 @@ if not exist "%DIST%\.dev-home\data\auth.json" (
 )
 
 set "MIMOCODE_HOME=%DIST%\.dev-home"
+REM 设置服务器密码后，MiMo 跳过 directory 沙箱检查，允许任意工作目录
+set "MIMOCODE_SERVER_PASSWORD=aiep2024"
 if exist "%DIST%\server\mimo-config.user.json" (
   set "MIMOCODE_CONFIG=%DIST%\server\mimo-config.user.json"
 ) else (
