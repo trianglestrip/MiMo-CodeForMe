@@ -2,19 +2,18 @@ import { Context, Effect, Layer } from "effect"
 
 import { Instance } from "../project/instance"
 
-import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
+import PROMPT_ANTHROPIC from "./prompt/default.txt"
 import PROMPT_DEFAULT from "./prompt/default.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
-import PROMPT_GPT from "./prompt/gpt.txt"
-import PROMPT_KIMI from "./prompt/kimi.txt"
+import PROMPT_GPT from "./prompt/default.txt"
+import PROMPT_KIMI from "./prompt/default.txt"
 
-import PROMPT_CODEX from "./prompt/codex.txt"
-import PROMPT_DEEPSEEK from "./prompt/deepseek.txt"
-import PROMPT_GLM from "./prompt/glm.txt"
+import PROMPT_CODEX from "./prompt/default.txt"
+import PROMPT_DEEPSEEK from "./prompt/default.txt"
+import PROMPT_GLM from "./prompt/default.txt"
 import PROMPT_MINIMAX from "./prompt/minimax.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
-import PROMPT_XIAOBO from "./prompt/xiaobo.txt"
 import type { Provider } from "@/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -71,8 +70,7 @@ export const layer = Layer.effect(
             `  Today's date: ${new Date(now).toDateString()}`,
             `</env>`,
           ].join("\n"),
-          `IMPORTANT: Your response must ALWAYS strictly follow the same major language as the user.`,
-          PROMPT_XIAOBO,
+          `IMPORTANT: Your response must ALWAYS strictly follow the same major language as the user.`
         ]
       },
 
