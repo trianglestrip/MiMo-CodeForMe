@@ -39,7 +39,7 @@ set "BIN_SRC="
 
 
 echo [1/4] bun install ...
-"%BUN%" install
+"%BUN%" install --frozen-lockfile
 if errorlevel 1 goto BuildFail
 
 echo [2/4] 编译 mimo.exe ...
