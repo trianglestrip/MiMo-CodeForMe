@@ -27,23 +27,6 @@ if "!BG!"=="1" (
 ) else (
   start "" cmd /k call "%ROOT%\server\run-mimo.bat"
 )
-ping 127.0.0.1 -n 3 >nul
-
-echo [INFO] 等待 MiMo serve ...
-set /a _W=0
-:WaitMimo
-curl -s -u mimocode:aiep2024 http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
-if not errorlevel 1 goto MimoReady
-set /a _W+=1
-if !_W! GEQ 45 goto MimoFail
-ping 127.0.0.1 -n 2 >nul
-goto WaitMimo
-
-:MimoFail
-echo [WARN] MiMo serve 未就绪，请查看 MiMo 4096 窗口或上方日志
-exit /b 1
-
-:MimoReady
-echo [OK] MiMo serve 就绪
+echo [OK] MiMo serve 已启动（后台启动中，前端自动检测连接状态）
 echo      API: http://127.0.0.1:4096/
 exit /b 0
