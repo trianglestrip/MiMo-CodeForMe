@@ -8,7 +8,7 @@ for %%I in ("%~dp0..") do set "DIST=%%~fI"
 for %%I in ("%~dp0..\..\..") do set "AGENT_ROOT=%%~fI"
 set "MIMO_EXE=%DIST%\server\mimo.exe"
 
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s -u mimocode:aiep2024 http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
   echo [INFO] MiMo 4096 已在运行，跳过启动
   if not defined AIEP_BG pause

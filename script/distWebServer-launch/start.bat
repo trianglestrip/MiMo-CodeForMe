@@ -14,7 +14,7 @@ if not exist "%ROOT%\server\mimo.exe" (
   exit /b 1
 )
 
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s -u mimocode:aiep2024 http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 (
   echo [INFO] MiMo 4096 已在运行
   echo [OK] API: http://127.0.0.1:4096/
@@ -32,7 +32,7 @@ ping 127.0.0.1 -n 3 >nul
 echo [INFO] 等待 MiMo serve ...
 set /a _W=0
 :WaitMimo
-curl -s http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
+curl -s -u mimocode:aiep2024 http://127.0.0.1:4096/global/health 2>nul | findstr /C:"healthy" >nul 2>&1
 if not errorlevel 1 goto MimoReady
 set /a _W+=1
 if !_W! GEQ 45 goto MimoFail
