@@ -77,7 +77,8 @@ export const providerHandlers = Layer.unwrap(
 
     const list = Effect.fn("ProviderHttpApi.list")(function* () {
       const config = yield* cfg.get()
-      const all = yield* Effect.promise(() => ModelsDev.get())
+      // Skip models.dev - only use providers from config
+      const all: Record<string, any> = {}
       const disabled = new Set(config.disabled_providers ?? [])
       const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
       const filtered: Record<string, (typeof all)[string]> = {}

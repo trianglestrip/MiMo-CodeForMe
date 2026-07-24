@@ -128,25 +128,8 @@ const fetchApi = async () => {
 }
 
 export const Data = lazy(async () => {
-  const result = await Filesystem.readJson(Flag.MIMOCODE_MODELS_PATH ?? filepath).catch(() => {})
-  if (result) return result
-  // @ts-ignore
-  const snapshot = await import("./models-snapshot.js")
-    .then((m) => m.snapshot as Record<string, unknown>)
-    .catch(() => undefined)
-  if (snapshot) return snapshot
-  if (Flag.MIMOCODE_DISABLE_MODELS_FETCH) return {}
-  return Flock.withLock(`models-dev:${filepath}`, async () => {
-    const result = await Filesystem.readJson(Flag.MIMOCODE_MODELS_PATH ?? filepath).catch(() => {})
-    if (result) return result
-    const result2 = await fetchApi()
-    if (result2.ok) {
-      await Filesystem.write(filepath, result2.text).catch((e) => {
-        log.error("Failed to write models cache", { error: e })
-      })
-    }
-    return JSON.parse(result2.text)
-  })
+  // Skip models.dev entirely - providers come from mimo-config.json only
+  return {}
 })
 
 export async function get() {
@@ -169,12 +152,13 @@ export async function refresh(force = false) {
   })
 }
 
-if (!Flag.MIMOCODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
-  void refresh()
-  setInterval(
-    async () => {
-      await refresh()
-    },
-    60 * 1000 * 60,
-  ).unref()
-}
+// Skip models.dev refresh - providers come from mimo-config.json only
+// if (!Flag.MIMOCODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
+//   void refresh()
+//   setInterval(
+//     async () => {
+//       await refresh()
+//     },
+//     60 * 1000 * 60,
+//   ).unref()
+// }

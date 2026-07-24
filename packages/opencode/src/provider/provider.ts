@@ -951,7 +951,9 @@ export type ConfigProvidersResult = Types.DeepMutable<Schema.Schema.Type<typeof 
 export function defaultModelIDs<T extends { models: Record<string, { id: string }> }>(providers: Record<string, T>) {
   return mapValues(providers, (item, providerID) => {
     if (providerID === "mimo" && item.models["mimo-auto"]) return "mimo-auto"
-    return sort(Object.values(item.models))[0].id
+    const sorted = sort(Object.values(item.models))
+    const first = sorted[0]
+    return first ? first.id : ""
   })
 }
 
@@ -1104,8 +1106,8 @@ const layer: Layer.Layer<
         using _ = log.time("state")
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
-        const modelsDev = yield* Effect.promise(() => ModelsDev.get())
-        const database = mapValues(modelsDev, fromModelsDevProvider)
+        // Skip models.dev - only use providers from mimo-config.json
+        const database: Record<ProviderID, Info> = {} as Record<ProviderID, Info>
 
         const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>
         const languages = new Map<string, LanguageModelV3>()
@@ -1157,7 +1159,7 @@ const layer: Layer.Layer<
 
         // extend database from config
         for (const [providerID, provider] of configProviders) {
-          const existing = database[providerID]
+          const existing = database[providerID as ProviderID]
           const parsed: Info = {
             id: ProviderID.make(providerID),
             name: provider.name ?? existing?.name ?? providerID,
@@ -1174,7 +1176,6 @@ const layer: Layer.Layer<
               model.provider?.npm ??
               provider.npm ??
               existingModel?.api.npm ??
-              modelsDev[providerID]?.npm ??
               "@ai-sdk/openai-compatible"
             const name = iife(() => {
               if (model.name) return model.name
@@ -1186,7 +1187,7 @@ const layer: Layer.Layer<
               api: {
                 id: apiID,
                 npm: apiNpm,
-                url: model.provider?.api ?? provider?.api ?? existingModel?.api.url ?? modelsDev[providerID]?.api ?? "",
+                url: model.provider?.api ?? provider?.api ?? existingModel?.api.url ?? "",
               },
               status: model.status ?? existingModel?.status ?? "active",
               name,
@@ -1261,7 +1262,7 @@ const layer: Layer.Layer<
             )
             parsed.models[modelID] = parsedModel
           }
-          database[providerID] = parsed
+          database[providerID as ProviderID] = parsed
         }
 
         // load env (skipped in mimo-only mode so ANTHROPIC_API_KEY etc. don't auto-light other providers)
@@ -1305,7 +1306,7 @@ const layer: Layer.Layer<
           const options = yield* Effect.promise(() =>
             plugin.auth!.loader!(
               () => bridge.promise(auth.get(providerID).pipe(Effect.orDie)) as any,
-              database[plugin.auth!.provider],
+              database[plugin.auth!.provider as ProviderID],
             ),
           )
           const opts = options ?? {}
@@ -1419,11 +1420,6 @@ const layer: Layer.Layer<
                 (v) => omit(v, ["disabled"]),
               )
             }
-          }
-
-          if (Object.keys(provider.models).length === 0) {
-            delete providers[providerID]
-            continue
           }
 
           log.info("found", { providerID })

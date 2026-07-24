@@ -57,7 +57,14 @@ for /d %%D in ("%PKG%\dist\mimocode-windows-x64-baseline") do (
   if not defined BIN_SRC if exist "%%D\bin\mimo" set "BIN_SRC=%%D\bin\mimo"
 )
 if not defined BIN_SRC (
-  echo [ERROR] 找不到 %PKG%\dist\mimocode-windows-x64-baseline\bin\mimo[.exe]
+  echo [WARN] baseline 构建产物不存在（下载不稳定），回退到 mimocode-windows-x64 ...
+  for /d %%D in ("%PKG%\dist\mimocode-windows-x64") do (
+    if exist "%%D\bin\mimo.exe" set "BIN_SRC=%%D\bin\mimo.exe"
+    if not defined BIN_SRC if exist "%%D\bin\mimo" set "BIN_SRC=%%D\bin\mimo"
+  )
+)
+if not defined BIN_SRC (
+  echo [ERROR] 找不到 %PKG%\dist\mimocode-windows-x64[-baseline]\bin\mimo[.exe]
   goto BuildFail
 )
 
