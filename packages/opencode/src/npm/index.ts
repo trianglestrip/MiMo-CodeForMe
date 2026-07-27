@@ -154,12 +154,19 @@ export const layer = Layer.effect(
       return resolveEntryPoint(first.name, first.path)
     }, Effect.scoped)
 
+    const bundledPlugin = (dir: string) => path.join(dir, "node_modules", "@mimo-ai", "plugin", "package.json")
+
     const install: Interface["install"] = Effect.fn("Npm.install")(function* (dir, input) {
       const canWrite = yield* afs.access(dir, { writable: true }).pipe(
         Effect.as(true),
         Effect.orElseSucceed(() => false),
       )
       if (!canWrite) return
+
+      // Offline/dist bundles ship a local @mimo-ai/plugin shim. Skip network reify
+      // so resolveTools does not hang on registry.npmjs.org in intranet environments.
+      if (process.env.MIMOCODE_SKIP_NPM_INSTALL === "true") return
+      if (yield* afs.existsSafe(bundledPlugin(dir))) return
 
       const add = input?.add.map((pkg) => [pkg.name, pkg.version].filter(Boolean).join("@")) ?? []
       if (
