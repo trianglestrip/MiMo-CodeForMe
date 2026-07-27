@@ -24,11 +24,17 @@
     },
     "zhipuai-coding-plan": {
       "options": {
-        "baseURL": "https://open.bigmodel.cn/api/paas/v4",
+        "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
         "apiKey": ""
       },
       "models": {
+        "glm-4.5": { "name": "GLM-4.5", "reasoning": true, "tool_call": true },
+        "glm-4.5-air": { "name": "GLM-4.5 Air", "reasoning": false, "tool_call": true },
+        "glm-4.6": { "name": "GLM-4.6", "reasoning": true, "tool_call": true },
+        "glm-4.7": { "name": "GLM-4.7", "reasoning": true, "tool_call": true },
+        "glm-5": { "name": "GLM-5", "reasoning": true, "tool_call": true },
         "glm-5-turbo": { "name": "GLM-5 Turbo", "reasoning": true, "tool_call": true },
+        "glm-5.1": { "name": "GLM-5.1", "reasoning": true, "tool_call": true },
         "glm-5.2": { "name": "GLM-5.2", "reasoning": true, "tool_call": true }
       }
     }
