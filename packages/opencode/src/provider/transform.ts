@@ -579,9 +579,7 @@ export function variants(model: Provider.Model): Record<string, Record<string, a
   const id = model.id.toLowerCase()
   const adaptiveEfforts = anthropicAdaptiveEfforts(model.api.id)
   if (
-    id.includes("deepseek") ||
     id.includes("minimax") ||
-    id.includes("glm") ||
     id.includes("mistral") ||
     id.includes("kimi") ||
     id.includes("k2p5") ||

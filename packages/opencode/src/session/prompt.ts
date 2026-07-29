@@ -1449,11 +1449,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         : ag.model
       const model = inputModel ?? agentModel ?? (yield* lastModel(input.sessionID))
       const same = agentModel && model.providerID === agentModel.providerID && model.modelID === agentModel.modelID
-      const full =
-        !input.variant && ag.variant && same
-          ? yield* provider.getModel(model.providerID, model.modelID).pipe(Effect.catchDefect(() => Effect.void))
-          : undefined
-      const variant = input.variant ?? (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined)
+      const resolved =
+        yield* provider.getModel(model.providerID, model.modelID).pipe(Effect.catchDefect(() => Effect.void))
+      const variant = input.variant ?? (resolved && ag.variant && same && resolved.variants?.[ag.variant] ? ag.variant : undefined)
 
       const info: MessageV2.User = {
         id: input.messageID ?? MessageID.ascending(),
@@ -1467,6 +1465,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           providerID: model.providerID,
           modelID: model.modelID,
           variant,
+          contextWindow: resolved?.limit?.context,
         },
         system: input.system,
         format: input.format,

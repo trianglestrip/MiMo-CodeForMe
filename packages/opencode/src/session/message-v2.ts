@@ -401,6 +401,7 @@ export const User = Base.extend({
     providerID: ProviderID.zod,
     modelID: ModelID.zod,
     variant: z.string().optional(),
+    contextWindow: z.number().optional(),
   }),
   system: z.string().optional(),
   tools: z.record(z.string(), z.boolean()).optional(),
