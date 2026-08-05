@@ -1,46 +1,28 @@
-Execute a TypeScript script that orchestrates existing tools programmatically. Use this for BATCH tool operations: loops, concurrency, filtering, and aggregation over many tool calls — the intermediate results stay OUT of the conversation context; only what you `return` comes back.
+Execute JavaScript to orchestrate the available tools.
 
-The `code` argument is the BODY of an async function (TypeScript or JavaScript):
-- Call tools via the `tools` object, e.g. `await tools.glob({ pattern: "src/**/*.ts" })`
-- Every tool returns `Promise<ToolResult>` where `ToolResult = { title: string; output: string; metadata: Record<string, unknown> }` — `output` is the same text you would see when calling the tool directly (may be truncated for very large outputs; check `metadata.truncated`).
-- Use `Promise.all` / `Promise.allSettled` for concurrency (max 8 in flight; excess queue automatically).
-- `console.log(...)` output is captured and returned alongside the result (capped) — use it for debugging, not as the primary channel.
-- `return` a SMALL, aggregated value (object/array/string). Returning huge raw data defeats the purpose.
+Write the body of an async function. The global `tools` object exposes every tool available to this execution, and each method returns a promise:
 
-Limits per execution: 50 tool calls, 8 concurrent, 60s of pure compute time (time spent waiting on tool calls is NOT charged), result capped at 256KB. Exceeding a limit fails the execution with a structured error.
-
-Permissions are enforced per tool call exactly as if you had called the tool directly — calls may pause awaiting user approval; a user rejection rejects that call's promise (catchable).
-
-State does NOT persist between executions: each tool_script call runs in a fresh sandbox — variables from a previous execution are gone. To pass data between executions, either `return` it (best for small results) or use the `files` raw-IO API to stage it in a temp file:
-```
-await files.writeText("/tmp/scan-results.json", JSON.stringify(hits))
-// ...next tool_script execution:
-const hits = JSON.parse(await files.readText("/tmp/scan-results.json"))
+```ts
+const results = await Promise.all(urls.map((url) => tools.webfetch({ url, format: "markdown" })))
+return results.map((result) => result.output)
 ```
 
-`tools.*` outputs are the AGENT-FACING text (e.g. `read` prefixes lines with `N: ` line numbers and may truncate). That is fine for scanning/matching, but for exact bytes (parsing JSON, byte-accurate content) use `files.readText` instead — raw content, no line numbers, no truncation. `files.readText` covers the project worktree and the OS temp dir; `files.writeText` is limited to the OS temp dir — project file writes must go through `tools.write` / `tools.edit` so permissions apply.
+Use `exec` when JavaScript can batch multiple independent tool calls, programmatically transform their results, or keep large intermediate outputs out of the conversation. Run independent calls with `Promise.all` or `Promise.allSettled`, but keep dependent operations sequential. Prefer direct tool calls when a result needs model judgment before the next call or only one small call is needed; do not use `exec` merely to force concurrency.
 
-When to use tool_script:
-- Same tool called many times (read 30 files, grep 10 patterns)
-- Results need deterministic filtering/aggregation/sorting/counting before you see them
-- Large intermediate outputs you don't need to read verbatim
+The script environment provides JavaScript built-ins plus `tools`, `files`, and `console`. It does not provide Node.js modules, `import`, `require`, `process`, `fetch`, or timers. Use the available tools for external operations.
 
-When NOT to use tool_script:
-- A single tool call — call the tool directly
-- Each step needs semantic judgment on the previous result — stay in the normal loop
-- You need to visually inspect results (images, screenshots)
-- High-risk side effects better done one at a time with your review between steps
+- Call tools with `await tools.name(input)`.
+- Active MCP tools are also callable as `tools.<mcp_tool_name>(input)` with the same permission checks as direct calls. When the MCP server returns structured data, the result carries it pre-parsed in the `structured` field.
+- Use `Promise.all` or `Promise.allSettled` only for independent calls; at most 8 run concurrently.
+- Return a small JSON-serializable aggregate. Circular values, BigInt, and throwing getters fail execution.
+- Use `console.log` only for debugging; logs are included in the result.
+- Tool permissions are enforced for every nested call.
+- State does not persist between executions. For temporary cross-execution data, use `files.writeText` and `files.readText` under the OS temp directory.
+- `bash` is available as both `tools.bash(...)` and its alias `tools.exec_command(...)`; both use the same permission and execution path.
+- Conversation-control tools are not available inside `exec`.
 
-Example:
-```
-const files = await tools.glob({ pattern: "src/**/*.ts" })
-const paths = files.output.split("\n").filter(p => p.trim() && !p.startsWith("("))
-const reads = await Promise.all(paths.map(p => tools.read({ file_path: p })))
-const hits = paths
-  .map((p, i) => ({ path: p, todos: (reads[i].output.match(/TODO/g) ?? []).length }))
-  .filter(x => x.todos > 0)
-  .sort((a, b) => b.todos - a.todos)
-return { total: hits.length, top: hits.slice(0, 20) }
-```
+By default an execution may make 50 tool calls and use 60 seconds of active compute. The `max_tool_calls` and `timeout_seconds` inputs can raise those limits to 500 calls and 600 seconds. Time waiting for nested tools does not count toward active compute.
+
+The result is wrapped in `<exec status="...">` and may contain `<return_value>`, `<warnings>`, `<logs>`, `<trace>`, and `<error_message>` blocks.
 
 The available tools and their exact input types are declared below.

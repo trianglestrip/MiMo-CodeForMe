@@ -1,12 +1,11 @@
-import path from "path"
-import { pathToFileURL } from "url"
 import z from "zod"
 import { Effect } from "effect"
-import * as Stream from "effect/Stream"
+import { Agent } from "../agent/agent"
 import { Ripgrep } from "../file/ripgrep"
 import { Skill } from "../skill"
 import { BuiltinWorkflow } from "../workflow/builtin"
 import * as Tool from "./tool"
+import { renderSkillContent } from "./skill-content"
 import DESCRIPTION from "./skill.txt"
 
 const Parameters = z.object({
@@ -18,6 +17,7 @@ export const SkillTool = Tool.define(
   Effect.gen(function* () {
     const skill = yield* Skill.Service
     const rg = yield* Ripgrep.Service
+    const agents = yield* Agent.Service
 
     return {
       description: DESCRIPTION,
@@ -36,9 +36,23 @@ export const SkillTool = Tool.define(
                   `workflow({ operation: "run", name: "${params.name}", args: { ... } }). Do NOT use the skill tool for it.`,
               )
             }
-            const all = yield* skill.all()
-            const available = all.map((item) => item.name).join(", ")
+            // Same set the tool description advertises, so a near miss cannot
+            // reveal a skill the model is not allowed to see.
+            const available = (yield* skill.modelInvocable(yield* agents.get(ctx.agent)))
+              .map((item) => item.name)
+              .join(", ")
             throw new Error(`Skill "${params.name}" not found. Available skills: ${available || "none"}`)
+          }
+
+          // Model reachability gate. The user can still load this skill by
+          // typing /name; redirect there instead of dead-ending, so the model
+          // reports the option rather than retrying and giving up.
+          if (info.disable_model_invocation) {
+            throw new Error(
+              `Skill "${info.name}" sets disable-model-invocation, so it cannot be loaded with the skill tool. ` +
+                `Only the user can start it by typing /${info.name}. Do not retry this tool — tell the user to run ` +
+                `/${info.name} if that is the workflow they want.`,
+            )
           }
 
           yield* ctx.ask({
@@ -48,37 +62,14 @@ export const SkillTool = Tool.define(
             metadata: {},
           })
 
-          const dir = path.dirname(info.location)
-          const base = pathToFileURL(dir).href
-          const limit = 10
-          const files = yield* rg.files({ cwd: dir, follow: false, hidden: true, signal: ctx.abort }).pipe(
-            Stream.filter((file) => !file.includes("SKILL.md")),
-            Stream.map((file) => path.resolve(dir, file)),
-            Stream.take(limit),
-            Stream.runCollect,
-            Effect.map((chunk) => [...chunk].map((file) => `<file>${file}</file>`).join("\n")),
-          )
+          const rendered = yield* renderSkillContent(info, rg, ctx.abort)
 
           return {
             title: `Loaded skill: ${info.name}`,
-            output: [
-              `<skill_content name="${info.name}">`,
-              `# Skill: ${info.name}`,
-              "",
-              info.content.trim(),
-              "",
-              `Base directory for this skill: ${base}`,
-              "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
-              "Note: file list is sampled.",
-              "",
-              "<skill_files>",
-              files,
-              "</skill_files>",
-              "</skill_content>",
-            ].join("\n"),
+            output: rendered.output,
             metadata: {
               name: info.name,
-              dir,
+              dir: rendered.dir,
             },
           }
         }).pipe(Effect.orDie),

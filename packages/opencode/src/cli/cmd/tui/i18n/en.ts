@@ -41,7 +41,7 @@ export const dict: Record<string, string> = {
 
   // Tips
   "tui.tips.label": "Tip",
-  "tui.tips.plain_terminal": "We recommend using iTerm or the VS Code terminal",
+  "tui.tips.plain_terminal": "The default Mac terminal has rendering limitations. Please use iTerm2 or the VS Code terminal",
   "tui.tips.attach_file": "Type {highlight}@{/highlight} followed by a filename to fuzzy search and attach files",
   "tui.tips.shell_prefix":
     "Start a message with {highlight}!{/highlight} to run shell commands directly (e.g., {highlight}!ls -la{/highlight})",
@@ -53,13 +53,18 @@ export const dict: Record<string, string> = {
     "Run {highlight}/dark{/highlight} for dark mode or {highlight}/light{/highlight} for light mode",
   "tui.tips.doc": "Run {highlight}/doc{/highlight} to open the user documentation",
   "tui.tips.free_models": "Free models are available for a limited time — try them now!",
+  "tui.tips.free_api_sunset":
+    "The free API service has ended. Run {highlight}/login{/highlight} to sign in. Subscribe to the MiMo Token Plan or configure a third-party API to use MiMo Code.",
   "tui.tips.multi_skills":
     "Combine multiple {highlight}/skill-name{/highlight} triggers in a single message to use several skills together",
+  "tui.tips.ask_slash_commands":
+    "Looking for a shortcut? Ask {highlight}Which slash commands can I use?{/highlight} directly in chat",
   "tui.tips.background":
     "Run {highlight}/background{/highlight} to set a custom image as your home background",
+  "tui.tips.compose_next":
+    "Try {highlight}/compose-next{/highlight} instead of the Compose agent for frontier models",
   "tui.tips.undo": "Use {highlight}/undo{/highlight} to revert the last message and file changes",
   "tui.tips.redo": "Use {highlight}/redo{/highlight} to restore previously undone messages and file changes",
-  "tui.tips.share": "Run {highlight}/share{/highlight} to create a public link to your conversation at opencode.ai",
   "tui.tips.drag_drop": "Drag and drop images or PDFs into the terminal to add them as context",
   "tui.tips.paste_image": "Press {highlight}Ctrl+V{/highlight} to paste images from your clipboard (on macOS use Ctrl+V, not Cmd+V — the terminal intercepts Cmd+V)",
   "tui.tips.editor":
@@ -136,7 +141,6 @@ export const dict: Record<string, string> = {
   "tui.tips.upgrade": "Run {highlight}mimo upgrade{/highlight} to update to the latest version",
   "tui.tips.auth_list": "Run {highlight}mimo auth list{/highlight} to see all configured providers",
   "tui.tips.agent_create": "Run {highlight}mimo agent create{/highlight} for guided agent creation",
-  "tui.tips.github_trigger": "Use {highlight}/opencode{/highlight} in GitHub issues/PRs to trigger AI actions",
   "tui.tips.github_install": "Run {highlight}mimo github install{/highlight} to set up the GitHub workflow",
   "tui.tips.github_oc": "Comment {highlight}/oc{/highlight} on PR code lines for targeted code reviews",
   "tui.tips.theme_system": 'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
@@ -166,7 +170,6 @@ export const dict: Record<string, string> = {
   "tui.tips.scroll_accel":
     "Enable {highlight}scroll_acceleration{/highlight} in {highlight}tui.json{/highlight} for smooth macOS-style scrolling",
   "tui.tips.username_toggle": "Toggle username display in chat via command palette ({highlight}Ctrl+P{/highlight})",
-  "tui.tips.docker": "Run {highlight}docker run -it --rm ghcr.io/anomalyco/opencode{/highlight} for containerized use",
   "tui.tips.zen": "Use {highlight}/connect{/highlight} with MiMo Code for curated, tested models",
   "tui.tips.agents_md": "Commit your project's {highlight}AGENTS.md{/highlight} file to Git for team sharing",
   "tui.tips.review": "Use {highlight}/review{/highlight} to review uncommitted changes, branches, or PRs",
@@ -214,8 +217,10 @@ export const dict: Record<string, string> = {
   "tui.skill.skill-creator.description": "Create, review, and improve agent skills",
   "tui.skill.drive-mimo.description": "Programmatically drive another MiMoCode process — headless JSON events or interactive TUI via tmux",
   "tui.skill.research-paper-writing.description": "Draft, polish, and reviewer-style critique for academic papers",
+  "tui.skill.playwright.description": "Automate real browser workflows from the terminal",
   "tui.skill.codex.description": "Run Codex CLI autonomously in scripts, CI, Docker, and Kubernetes",
   "tui.skill.claude-code.description": "Delegate coding tasks to Claude Code CLI",
+  "tui.skill.grok-build.description": "Operate Grok Build from the command line",
   "tui.skill.design-blueprint.description":
     "Produce a design blueprint (DESIGN.md + Decision Trace) before mocking up any visual",
   "tui.skill.super-research.description":
@@ -224,6 +229,10 @@ export const dict: Record<string, string> = {
     "Deep multi-source investigation with cross-checked, cited reports",
   "tui.skill.modern-python-toolchain.description":
     "Modern Python project setup with uv, ruff, and pyright",
+  "tui.skill.data-analytics.description":
+    "Analyze product and business data, design KPIs, and build dashboards and reports",
+  "tui.skill.product-design.description": "Research, audit, prototype, and validate product and UX designs",
+  "tui.skill.sales.description": "Prepare meetings, research accounts, plan deals, and work with sales systems",
   "tui.skill.compose:ask.description": "Ask the user for decisions or clarifications",
   "tui.skill.compose:brainstorm.description": "Explore requirements and design before implementation",
   "tui.skill.compose:debug.description": "Systematic debugging before proposing fixes",
@@ -238,6 +247,8 @@ export const dict: Record<string, string> = {
   "tui.skill.compose:tdd.description": "Test-driven development — write tests before code",
   "tui.skill.compose:verify.description": "Run verification and confirm passing output",
   "tui.skill.compose:worktree.description": "Create an isolated workspace for feature work",
+  "tui.skill.compose-next.description":
+    "Next-generation orchestration: end-to-end feature work (grill, spec, implement, verify, review, finish) for strong models",
 
   // Language switching
   "tui.command.language.switch.title": "Switch language",
@@ -256,12 +267,32 @@ export const dict: Record<string, string> = {
   "tui.command.model.cycle_favorite.title": "Favorite cycle",
   "tui.command.model.cycle_favorite_reverse.title": "Favorite cycle reverse",
   "tui.command.agent.list.title": "Switch agent",
+  "tui.command.agent.force.title": "Force switch mode (bypass mid-session lock)",
   "tui.command.modalities.title": "Configure input modalities",
   "tui.modalities.title": "Input modalities — {{model}}",
   "tui.modalities.saved": "Input modalities updated: {{modalities}}",
   "tui.modalities.no_model": "No model selected",
   "tui.modalities.hint.toggle": "toggle",
   "tui.modalities.hint.save": "save",
+  "tui.command.context_limit.title": "Set context limit (early compaction)",
+  "tui.context_limit.title": "Context limit — {{model}}",
+  "tui.context_limit.hint": "Model window {{window}}, compacts at {{compact}}",
+  "tui.context_limit.option.default": "Model default ({{value}})",
+  "tui.context_limit.option.default_description": "Compact at the model's own window",
+  "tui.context_limit.option.tier_description": "Compacts at ~{{value}}",
+  "tui.context_limit.option.custom": "Custom…",
+  "tui.context_limit.option.custom_description": 'Enter a token count, "300K" or "50%"',
+  "tui.context_limit.custom_title": "Context limit",
+  "tui.context_limit.custom_description": 'Token count, "300K", "1M" or "50%" — must stay below {{window}}',
+  "tui.context_limit.saved": "{{model}} now compacts at {{value}}",
+  "tui.context_limit.cleared": "{{model}} restored to the model window",
+  "tui.context_limit.invalid": "Not a valid token amount: {{value}}",
+  "tui.context_limit.too_large": "Must be below the model window ({{window}})",
+  "tui.context_limit.busy": "Cannot change the context limit while a session is running",
+  "tui.context_limit.too_small": "Must leave room for the {{reserved}} compaction reserve",
+  "tui.context_limit.scalar_config": "compaction.max_context is set to a single value for all models — edit it in mimocode.json to switch to per-model limits",
+  "tui.context_limit.shadowed": "Saved, but another config still forces {{value}} — check your project mimocode.json",
+  "tui.context_limit.no_model": "No model selected",
   "tui.command.mcp.list.title": "Toggle MCPs",
   "tui.command.never_ask.title_on": "Never-ask: ON (auto-decide, permissions excluded) — click to turn off",
   "tui.command.never_ask.title_off": "Never-ask: OFF — click to turn on (auto-decide, permissions excluded)",
@@ -287,6 +318,8 @@ export const dict: Record<string, string> = {
   "tui.command.worktree.list.title": "Worktrees",
   "tui.command.theme.switch.title": "Switch theme",
   "tui.command.image.switch.title": "Switch background image",
+  "tui.dialog.agent.force.title": "Force switch mode",
+  "tui.dialog.agent.force.hint": "Bypasses the mid-session lock — switch to any available mode",
   "tui.dialog.image.title": "Background images",
   "tui.dialog.image.import.option": "Choose new image…",
   "tui.dialog.image.import.title": "Import background image",
@@ -296,6 +329,10 @@ export const dict: Record<string, string> = {
   "tui.dialog.image.import.success": "Background image imported",
   "tui.dialog.image.none": "None (use starry background)",
   "tui.command.logo.switch.title": "Switch logo design",
+  "tui.command.visual_mode.title_on": "Vivid visuals - switch to Minimal",
+  "tui.command.visual_mode.title_off": "Minimal visuals - switch to Vivid",
+  "tui.visual_mode.enabled": "Vivid display enabled: star field and logo effects restored; meteors and animated activity follow the animation setting",
+  "tui.visual_mode.disabled": "Vivid display disabled: stars, meteors, and logo effects hidden; activity indicators remain stable",
   "tui.dialog.logo.title": "Logo design",
   "tui.dialog.logo.option.classic": "Classic (bold)",
   "tui.dialog.logo.option.thin": "Thin (half-block)",
@@ -314,11 +351,15 @@ export const dict: Record<string, string> = {
   "tui.dialog.agreement.title": "Terms & Privacy",
   "tui.dialog.agreement.message": "Please review and agree to continue.",
   "tui.dialog.agreement.confirm": "Agree & Continue",
+  "tui.dialog.free_api_sunset.title": "Free API service ended",
+  "tui.dialog.free_api_sunset.message":
+    "Run /login to sign in. Subscribe to the MiMo Token Plan or configure a third-party API to use MiMo Code.",
   "tui.command.consent.revoke.title": "Revoke free-model agreement",
   "tui.consent.revoked": "Free-model agreement revoked — you'll be asked to agree again",
   "tui.dialog.select.placeholder": "Search",
   "tui.dialog.model.login_hint": "Tip: run /login to sign in before switching models",
-  "tui.model.mimo_auto.name": "MiMo Auto (MiMo-V2.5, limited-time free)",
+  "tui.model.mimo_auto.name": "MiMo Auto (MiMo-V2.5 free until Jul 26, 18:00 · UTC+8)",
+  "tui.model.mimo_auto.sunset_name": "MiMo Auto (MiMo-V2.5)",
   "tui.dialog.token_plan.title": "Subscribe to a Token Plan or wait in queue",
   "tui.dialog.token_plan.line1": "In free mode, requests are currently queued. For stable, high-quality service,",
   "tui.dialog.token_plan.subscribe": "subscribe to ",
@@ -507,14 +548,6 @@ export const dict: Record<string, string> = {
   "tui.dialog.login.flow.invalid_code": "Invalid Code, please retry",
   "tui.dialog.login.flow.copied": "Copied",
 
-  // Question i18n — plan_enter
-  "tui.question.plan_enter.question": "Would you like to switch to plan mode for structured planning?",
-  "tui.question.plan_enter.header": "Plan",
-  "tui.question.plan_enter.option.0.label": "Yes",
-  "tui.question.plan_enter.option.0.description": "Switch to plan agent for read-only planning",
-  "tui.question.plan_enter.option.1.label": "No",
-  "tui.question.plan_enter.option.1.description": "Stay in current mode",
-
   // Question i18n — plan_exit
   "tui.question.plan_exit.question": "Plan at {{plan}} is complete. Would you like to switch to the build agent and start implementing?",
   "tui.question.plan_exit.header": "Plan",
@@ -525,6 +558,10 @@ export const dict: Record<string, string> = {
 
   // Session badges
   "tui.session.badge.auto": "Auto",
+
+  // Context rebuild boundary marker (inserted by /rebuild)
+  "tui.session.rebuild_boundary.label": "context rebuilt",
+  "tui.session.rebuild_boundary.detail": "earlier messages summarized",
 
   // Workspace trust
   "trust.title": "Accessing workspace:",

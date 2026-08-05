@@ -157,7 +157,7 @@ test("compose:* skills are denied for build/plan, allowed for compose", async ()
   })
 })
 
-test("plan_enter and plan_exit are allowed for build and plan agents", async () => {
+test("plan_exit is allowed for build and plan agents", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -166,23 +166,21 @@ test("plan_enter and plan_exit are allowed for build and plan agents", async () 
       for (const name of ["build", "plan"]) {
         const agent = agents.find((a) => a.name === name)
         expect(agent).toBeDefined()
-        const disabled = Permission.disabled(["plan_enter", "plan_exit"], agent!.permission)
-        expect(disabled.has("plan_enter")).toBe(false)
+        const disabled = Permission.disabled(["plan_exit"], agent!.permission)
         expect(disabled.has("plan_exit")).toBe(false)
       }
     },
   })
 })
 
-test("plan_enter and plan_exit are denied for compose agent", async () => {
+test("plan_exit is denied for compose agent", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const compose = await load(tmp.path, (svc) => svc.get("compose"))
       expect(compose).toBeDefined()
-      const disabled = Permission.disabled(["plan_enter", "plan_exit"], compose!.permission)
-      expect(disabled.has("plan_enter")).toBe(true)
+      const disabled = Permission.disabled(["plan_exit"], compose!.permission)
       expect(disabled.has("plan_exit")).toBe(true)
     },
   })
@@ -987,7 +985,7 @@ test("title/summary/checkpoint-writer are mode=subagent + hidden (spawnable filt
 // Regression for ses_19d1aa927: the fork agent (checkpoint-writer) inherits
 // compose's tool list verbatim (Task 2.6 removed toolAllowlist). This test
 // confirms the patch-swap in registry.ts fires correctly per model family.
-itTool.live("compose's tool list contains apply_patch on GPT-5+ but not on Claude", () =>
+itTool.live("compose's tool list swaps GPT-specific file tools", () =>
   provideTmpdirInstance((dir) =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
@@ -1003,8 +1001,10 @@ itTool.live("compose's tool list contains apply_patch on GPT-5+ but not on Claud
       })
       const gptIDs = gptTools.map((t) => t.id)
       expect(gptIDs).toContain("apply_patch")
+      expect(gptIDs).toContain("view_image")
       expect(gptIDs).not.toContain("edit")
       expect(gptIDs).not.toContain("write")
+      expect(gptIDs).not.toContain("read")
 
       const claudeTools = yield* registry.tools({
         modelID: ModelID.make("claude-opus-4-7"),
@@ -1014,7 +1014,9 @@ itTool.live("compose's tool list contains apply_patch on GPT-5+ but not on Claud
       const claudeIDs = claudeTools.map((t) => t.id)
       expect(claudeIDs).toContain("edit")
       expect(claudeIDs).toContain("write")
+      expect(claudeIDs).toContain("read")
       expect(claudeIDs).not.toContain("apply_patch")
+      expect(claudeIDs).not.toContain("view_image")
     }),
   ),
 )

@@ -45,7 +45,7 @@ export const dict = {
 
   // Tips
   "tui.tips.label": "Подсказка",
-  "tui.tips.plain_terminal": "Рекомендуем использовать iTerm или терминал VS Code",
+  "tui.tips.plain_terminal": "Стандартный терминал Mac имеет ограничения рендеринга. Используйте iTerm2 или терминал VS Code",
   "tui.tips.attach_file":
     "Введите {highlight}@{/highlight}, а затем имя файла, чтобы выполнить нечёткий поиск и прикрепить файлы",
   "tui.tips.shell_prefix":
@@ -58,16 +58,20 @@ export const dict = {
     "Выполните {highlight}/dark{/highlight} для тёмного режима или {highlight}/light{/highlight} для светлого",
   "tui.tips.doc": "Выполните {highlight}/doc{/highlight}, чтобы открыть пользовательскую документацию",
   "tui.tips.free_models": "Бесплатные модели доступны ограниченное время — попробуйте их сейчас!",
+  "tui.tips.free_api_sunset":
+    "Сервис бесплатного API завершён. Выполните {highlight}/login{/highlight}, чтобы войти. Оформите подписку на MiMo Token Plan или настройте сторонний API для использования MiMo Code.",
   "tui.tips.multi_skills":
     "Комбинируйте несколько {highlight}/skill-name{/highlight} в одном сообщении, чтобы использовать несколько Skills одновременно",
+  "tui.tips.ask_slash_commands":
+    "Ищете команду? Спросите {highlight}Какие slash-команды я могу использовать?{/highlight} прямо в чате",
   "tui.tips.background":
     "Выполните {highlight}/background{/highlight}, чтобы установить произвольное изображение в качестве фона главной страницы",
+  "tui.tips.compose_next":
+    "Попробуйте {highlight}/compose-next{/highlight} вместо агента Compose для передовых моделей",
   "tui.tips.undo":
     "Используйте {highlight}/undo{/highlight}, чтобы отменить последнее сообщение и изменения файлов",
   "tui.tips.redo":
     "Используйте {highlight}/redo{/highlight}, чтобы вернуть ранее отменённые сообщения и изменения",
-  "tui.tips.share":
-    "Выполните {highlight}/share{/highlight}, чтобы получить публичную ссылку на диалог на opencode.ai",
   "tui.tips.drag_drop": "Перетащите изображения или PDF в терминал, чтобы добавить их в контекст",
   "tui.tips.paste_image":
     "Нажмите {highlight}Ctrl+V{/highlight}, чтобы вставить изображение из буфера обмена (в macOS используйте Ctrl+V, а не Cmd+V — терминал перехватывает Cmd+V)",
@@ -184,8 +188,6 @@ export const dict = {
     "Выполните {highlight}mimo auth list{/highlight}, чтобы увидеть всех настроенных провайдеров",
   "tui.tips.agent_create":
     "Выполните {highlight}mimo agent create{/highlight}, чтобы создать агента в пошаговом режиме",
-  "tui.tips.github_trigger":
-    "Используйте {highlight}/opencode{/highlight} в issue/PR на GitHub, чтобы запускать AI-действия",
   "tui.tips.github_install":
     "Выполните {highlight}mimo github install{/highlight}, чтобы настроить GitHub-workflow",
   "tui.tips.github_oc":
@@ -237,8 +239,6 @@ export const dict = {
     "Включите {highlight}scroll_acceleration{/highlight} в {highlight}tui.json{/highlight} для плавной прокрутки",
   "tui.tips.username_toggle":
     "Переключайте отображение имени пользователя через палитру команд ({highlight}Ctrl+P{/highlight})",
-  "tui.tips.docker":
-    "Выполните {highlight}docker run -it --rm ghcr.io/anomalyco/opencode{/highlight} для контейнерного запуска",
   "tui.tips.zen":
     "Используйте {highlight}/connect{/highlight} с MiMo Code для подобранных и протестированных моделей",
   "tui.tips.agents_md":
@@ -293,8 +293,10 @@ export const dict = {
   "tui.skill.skill-creator.description": "Создание, проверка и улучшение skills агента",
   "tui.skill.drive-mimo.description": "Программное управление другим процессом MiMoCode — headless JSON-события или интерактивный TUI через tmux",
   "tui.skill.research-paper-writing.description": "Написание, полировка и рецензирование научных статей",
+  "tui.skill.playwright.description": "Автоматизация реальных сценариев браузера из терминала",
   "tui.skill.codex.description": "Автономный запуск Codex CLI в скриптах, CI, Docker и Kubernetes",
   "tui.skill.claude-code.description": "Делегирование задач программирования Claude Code CLI",
+  "tui.skill.grok-build.description": "Работа с Grok Build из командной строки",
   "tui.skill.design-blueprint.description":
     "Создать проектную спецификацию (DESIGN.md + Decision Trace) до макетов",
   "tui.skill.super-research.description":
@@ -303,6 +305,12 @@ export const dict = {
     "Глубокое многоисточниковое исследование с перекрёстной проверкой и цитированием",
   "tui.skill.modern-python-toolchain.description":
     "Настройка Python-проекта с uv, ruff и pyright",
+  "tui.skill.data-analytics.description":
+    "Анализ данных о продукте и бизнесе, проектирование KPI, создание дашбордов и отчётов",
+  "tui.skill.product-design.description":
+    "Исследование, аудит, прототипирование и проверка дизайна продукта и UX",
+  "tui.skill.sales.description":
+    "Подготовка встреч, исследование клиентов, планирование сделок и работа с системами продаж",
   "tui.skill.compose:ask.description": "Запросить у пользователя решение или уточнение",
   "tui.skill.compose:brainstorm.description": "Исследовать требования и дизайн перед реализацией",
   "tui.skill.compose:debug.description": "Системная отладка перед предложением исправлений",
@@ -317,6 +325,8 @@ export const dict = {
   "tui.skill.compose:tdd.description": "Разработка через тестирование — тесты перед кодом",
   "tui.skill.compose:verify.description": "Запустить проверку и подтвердить успешный результат",
   "tui.skill.compose:worktree.description": "Создать изолированное рабочее пространство",
+  "tui.skill.compose-next.description":
+    "Новое поколение оркестрации: сквозная работа над фичей (grill, spec, реализация, проверка, ревью, финализация) для сильных моделей",
 
   // Language switching
   "tui.command.language.switch.title": "Сменить язык",
@@ -365,6 +375,10 @@ export const dict = {
   "tui.command.opencode.status.title": "Посмотреть статус",
   "tui.command.theme.switch.title": "Сменить тему",
   "tui.command.logo.switch.title": "Сменить дизайн логотипа",
+  "tui.command.visual_mode.title_on": "Расширенное оформление - перейти к минимальному",
+  "tui.command.visual_mode.title_off": "Минимальное оформление - перейти к расширенному",
+  "tui.visual_mode.enabled": "Расширенное оформление включено: звёздный фон и эффекты логотипа восстановлены; метеоры и анимация индикаторов зависят от настройки анимации",
+  "tui.visual_mode.disabled": "Расширенное оформление выключено: звёзды, метеоры и эффекты логотипа скрыты; индикаторы остаются неподвижными",
   "tui.dialog.logo.title": "Дизайн логотипа",
   "tui.dialog.logo.option.classic": "Классический (жирный)",
   "tui.dialog.logo.option.thin": "Тонкий (полублок)",
@@ -384,11 +398,15 @@ export const dict = {
   "tui.dialog.agreement.title": "Условия и конфиденциальность",
   "tui.dialog.agreement.message": "Ознакомьтесь и примите их, чтобы продолжить.",
   "tui.dialog.agreement.confirm": "Принять и продолжить",
+  "tui.dialog.free_api_sunset.title": "Сервис бесплатного API завершён",
+  "tui.dialog.free_api_sunset.message":
+    "Выполните /login, чтобы войти. Оформите подписку на MiMo Token Plan или настройте сторонний API для использования MiMo Code.",
   "tui.command.consent.revoke.title": "Отозвать согласие на бесплатную модель",
   "tui.consent.revoked": "Согласие на бесплатную модель отозвано — потребуется принять снова",
   "tui.dialog.select.placeholder": "Поиск",
   "tui.dialog.model.login_hint": "Подсказка: выполните /login для входа перед сменой модели",
-  "tui.model.mimo_auto.name": "MiMo Auto (MiMo-V2.5, временно бесплатно)",
+  "tui.model.mimo_auto.name": "MiMo Auto (MiMo-V2.5 бесплатно до 26 июля, 18:00 · UTC+8)",
+  "tui.model.mimo_auto.sunset_name": "MiMo Auto (MiMo-V2.5)",
   "tui.dialog.token_plan.title": "Оформите Token Plan или подождите в очереди",
   "tui.dialog.token_plan.line1":
     "В бесплатном режиме запросы сейчас в очереди. Для стабильного и качественного сервиса",
@@ -568,14 +586,6 @@ export const dict = {
     "Вход не требуется — просто запустите mimo. Для платных/премиум-моделей выберите вход через браузер MiMo.",
   "cli.providers.mimo_login.decrypt_retry": "Ошибка расшифровки, повторите попытку (осталось попыток: {remaining})",
   "cli.providers.mimo_login.decrypt_exhausted": "Ошибка расшифровки, превышено максимальное число попыток",
-
-  // Question i18n — plan_enter
-  "tui.question.plan_enter.question": "Переключиться в режим plan для структурированного планирования?",
-  "tui.question.plan_enter.header": "Вход в план",
-  "tui.question.plan_enter.option.0.label": "Да",
-  "tui.question.plan_enter.option.0.description": "Переключиться на агента plan для планирования в режиме чтения",
-  "tui.question.plan_enter.option.1.label": "Нет",
-  "tui.question.plan_enter.option.1.description": "Остаться в текущем режиме",
 
   // Question i18n — plan_exit
   "tui.question.plan_exit.question": "План {{plan}} завершён. Переключиться на агента build и начать реализацию?",

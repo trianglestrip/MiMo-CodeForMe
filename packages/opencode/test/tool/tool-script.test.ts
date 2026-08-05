@@ -85,7 +85,18 @@ function fakeDef(id: string, execute: (args: any) => Promise<string>): Tool.Def 
   }
 }
 
-async function runToolScript(code: string, defs: Tool.Def[], abort?: AbortSignal) {
+async function runToolScript(
+  code: string,
+  defs: Tool.Def[],
+  abort?: AbortSignal,
+  opts?: {
+    ask?: () => Effect.Effect<void>
+    maxToolCalls?: number
+    timeoutSeconds?: number
+    toolWhitelist?: string[]
+    mcp?: Record<string, any>
+  },
+) {
   const prev = toolScriptRegistry.current
   toolScriptRegistry.current = () => Effect.succeed(defs)
   try {
@@ -96,16 +107,24 @@ async function runToolScript(code: string, defs: Tool.Def[], abort?: AbortSignal
         const def = await Effect.runPromise(Tool.init(info))
         return runtime.runPromise(
           def.execute(
-            { code },
+            {
+              code,
+              ...(opts?.maxToolCalls !== undefined && { max_tool_calls: opts.maxToolCalls }),
+              ...(opts?.timeoutSeconds !== undefined && { timeout_seconds: opts.timeoutSeconds }),
+            },
             {
               sessionID: "ses_test" as any,
               messageID: "msg_test" as any,
               agent: "build",
               abort: abort ?? new AbortController().signal,
               callID: "call_test",
+              extra: {
+                ...(opts?.toolWhitelist ? { toolWhitelist: opts.toolWhitelist } : {}),
+                ...(opts?.mcp ? { execMcp: { current: opts.mcp } } : {}),
+              },
               messages: [],
               metadata: () => Effect.void,
-              ask: () => Effect.void,
+              ask: opts?.ask ?? (() => Effect.void),
             },
           ),
         )
@@ -116,7 +135,20 @@ async function runToolScript(code: string, defs: Tool.Def[], abort?: AbortSignal
   }
 }
 
-describe("tool_script", () => {
+describe("exec", () => {
+  test("cannot call tools outside the actor runtime whitelist", async () => {
+    const result = await runToolScript(
+      `return await tools.echo({ value: "blocked" })`,
+      [fakeDef("echo", async () => "unexpected")],
+      undefined,
+      { toolWhitelist: ["exec"] },
+    )
+
+    expect(result.metadata.status).toBe("code_error")
+    expect(result.output).toContain("echo")
+    expect(result.output).not.toContain("unexpected")
+  })
+
   test("executes code, calls tools, returns aggregated result", async () => {
     const seen: string[] = []
     const defs = [
@@ -140,6 +172,29 @@ describe("tool_script", () => {
     expect(result.metadata.toolCalls).toBe(3)
   })
 
+  test("terminal metadata keeps the per-tool counts breakdown", async () => {
+    const defs = [
+      fakeDef("echo", async (args) => `echo:${args.value}`),
+      fakeDef("boom", async () => {
+        throw new Error("kapow")
+      }),
+    ]
+    const result = await runToolScript(
+      `
+      await tools.echo({ value: "a" })
+      await tools.echo({ value: "b" })
+      try { await tools.boom({}) } catch {}
+      return "done"
+      `,
+      defs,
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.metadata.counts).toEqual({
+      echo: { n: 2, errors: 0 },
+      boom: { n: 1, errors: 1 },
+    })
+  })
+
   test("accepts TypeScript syntax (types stripped by transpiler)", async () => {
     const result = await runToolScript(
       `
@@ -155,7 +210,7 @@ describe("tool_script", () => {
 
   test("console.log is captured into Logs block", async () => {
     const result = await runToolScript(`console.log("hello", { a: 1 }); return 1`, [])
-    expect(result.output).toContain("Logs:")
+    expect(result.output).toContain("<logs>")
     expect(result.output).toContain('hello {"a":1}')
   })
 
@@ -198,6 +253,43 @@ describe("tool_script", () => {
     expect(result.metadata.status).toBe("budget_exceeded")
   })
 
+  test("max_tool_calls raises the call budget", async () => {
+    const defs = [fakeDef("ping", async () => "pong")]
+    const result = await runToolScript(
+      `
+      for (let i = 0; i < 60; i++) await tools.ping({})
+      return "done"
+      `,
+      defs,
+      undefined,
+      { maxToolCalls: 80 },
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.metadata.toolCalls).toBe(60)
+  })
+
+  test("max_tool_calls lowers the call budget and the error names the limit", async () => {
+    const defs = [fakeDef("ping", async () => "pong")]
+    const result = await runToolScript(
+      `
+      for (let i = 0; i < 10; i++) await tools.ping({})
+      return "done"
+      `,
+      defs,
+      undefined,
+      { maxToolCalls: 5 },
+    )
+    expect(result.metadata.status).toBe("budget_exceeded")
+    expect(result.output).toContain("tool call budget exceeded (5 per execution)")
+  })
+
+  test("timeout_seconds bounds compute time and the error names the budget", async () => {
+    const result = await runToolScript(`while (true) {}`, [], undefined, { timeoutSeconds: 1 })
+    expect(result.metadata.status).toBe("timeout")
+    expect(result.output).toContain("1s of active compute")
+    expect(result.output).toContain("timeout_seconds")
+  }, 15_000)
+
   test("syntax error → code_error", async () => {
     const result = await runToolScript(`const = broken (`, [])
     expect(result.metadata.status).toBe("code_error")
@@ -220,6 +312,28 @@ describe("tool_script", () => {
       defs,
     )
     expect(result.output).toContain("unknown tool: task")
+  })
+
+  test("bash and exec_command dispatch through the same tool definition", async () => {
+    const seen: string[] = []
+    const defs = [
+      fakeDef("bash", async (args) => {
+        seen.push(args.value)
+        return `ran:${args.value}`
+      }),
+    ]
+    const result = await runToolScript(
+      `return await Promise.all([
+        tools.bash({ value: "direct" }),
+        tools.exec_command({ value: "alias" }),
+      ])`,
+      defs,
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.metadata.toolCalls).toBe(2)
+    expect(result.output).toContain("ran:direct")
+    expect(result.output).toContain("ran:alias")
+    expect(seen.toSorted()).toEqual(["alias", "direct"])
   })
 
   test("concurrency is capped at 8", async () => {
@@ -246,7 +360,7 @@ describe("tool_script", () => {
     expect(peak).toBeGreaterThan(1)
   })
 
-  test("Date works inside tool_script guest", async () => {
+  test("Date works inside exec guest", async () => {
     const result = await runToolScript(`return typeof Date.now()`, [])
     expect(result.output).toContain("number")
   })
@@ -313,6 +427,116 @@ describe("tool_script", () => {
     expect(result.metadata.status).toBe("completed")
     expect(result.output).toContain("1: not a line number")
   })
+
+  test("circular reference in return value fails loud with the offending path", async () => {
+    const result = await runToolScript(`const a = { items: [{}] }; a.items[0].self = a; return a`, [])
+    expect(result.metadata.status).toBe("code_error")
+    expect(result.output).toContain("circular reference at $.items[0].self")
+  })
+
+  test("BigInt fails loud with path and conversion hint (top-level and nested)", async () => {
+    const top = await runToolScript(`return 123n`, [])
+    expect(top.metadata.status).toBe("code_error")
+    expect(top.output).toContain("BigInt at $")
+    const nested = await runToolScript(`return { x: { y: 123n } }`, [])
+    expect(nested.metadata.status).toBe("code_error")
+    expect(nested.output).toContain("BigInt at $.x.y")
+  })
+
+  test("throwing getter fails loud with path", async () => {
+    const result = await runToolScript(`return { get x() { throw new Error("boom") } }`, [])
+    expect(result.metadata.status).toBe("code_error")
+    expect(result.output).toContain("getter at $.x threw: boom")
+  })
+
+  test("lossy conversions succeed with warnings: NaN, Map, Set, Error, RegExp", async () => {
+    const result = await runToolScript(
+      `return { n: NaN, m: new Map([["k", 1]]), s: new Set([2]), e: new Error("msg"), r: /x/g }`,
+      [],
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain("<warnings>")
+    expect(result.output).toContain("NaN at $.n serialized as null")
+    expect(result.output).toContain('"m": [')
+    expect(result.output).toContain('"message": "msg"')
+    expect(result.output).toContain('"r": "/x/g"')
+  })
+
+  test("clean JSON return has no warnings block", async () => {
+    const result = await runToolScript(`return { a: 1, b: "x", c: [true, null] }`, [])
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).not.toContain("<warnings>")
+  })
+
+  test("console.log renders circular objects and Errors usefully", async () => {
+    const result = await runToolScript(
+      `const a = {}; a.self = a; console.log(a); console.log(new Error("oops")); return "done"`,
+      [],
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain('{"self":"[Circular]"}')
+    expect(result.output).toContain("oops")
+  })
+
+  test("string return passes through verbatim (no JSON escaping)", async () => {
+    const result = await runToolScript(`return "line1\\nline2 with \\"quotes\\""`, [])
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain('line1\nline2 with "quotes"')
+  })
+
+  test("syntax error reports line, column, and source line", async () => {
+    const result = await runToolScript(`const ok = 1\nconst = broken (`, [])
+    expect(result.metadata.status).toBe("code_error")
+    expect(result.output).toContain("line 2, column 7")
+    expect(result.output).toContain("const = broken (")
+  })
+
+  test("top-level import gets an explicit not-supported note", async () => {
+    const result = await runToolScript(`import * as x from "node:fs"\nreturn 1`, [])
+    expect(result.metadata.status).toBe("code_error")
+    expect(result.output).toContain("import/export are NOT supported")
+  })
+
+  test("files: literal /tmp paths work (macOS symlink jail)", async () => {
+    const marker = path.join("/tmp", `ts-jail-${Date.now()}.json`)
+    const result = await runToolScript(
+      `
+      await files.writeText("${marker}", "via-tmp")
+      return await files.readText("${marker}")
+      `,
+      [],
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain("via-tmp")
+    await fs.rm(marker, { force: true })
+  })
+
+  test("files.readText rejects binary (non-UTF-8) files instead of returning empty", async () => {
+    const bin = path.join(os.tmpdir(), `ts-bin-${Date.now()}.dat`)
+    await fs.writeFile(bin, new Uint8Array([0x00, 0xff, 0xfe, 0x41, 0x80]))
+    const result = await runToolScript(
+      `try { await files.readText("${bin}"); return "no-error" } catch (e) { return "caught: " + e.message }`,
+      [],
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain("caught:")
+    expect(result.output).toContain("not valid UTF-8")
+    await fs.rm(bin, { force: true })
+  })
+
+  test("strings containing NUL survive the host→guest marshal boundary", async () => {
+    const nulFile = path.join(os.tmpdir(), `ts-nul-${Date.now()}.txt`)
+    // Valid UTF-8 containing a NUL byte — legal text, previously truncated at \0.
+    await fs.writeFile(nulFile, "before\0after")
+    const result = await runToolScript(
+      `const v = await files.readText("${nulFile}"); return { len: v.length, tail: v.slice(7) }`,
+      [],
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain('"len": 12')
+    expect(result.output).toContain('"tail": "after"')
+    await fs.rm(nulFile, { force: true })
+  })
 })
 
 describe("renderToolScriptDeclarations", () => {
@@ -329,9 +553,145 @@ describe("renderToolScriptDeclarations", () => {
     expect(text).toContain("declare const tools")
   })
 
-  test("exclusion list covers agent control-flow tools", () => {
-    for (const id of ["task", "question", "actor", "skill", "plan_enter", "plan_exit", "tool_script"]) {
+  test("exclusion list covers agent control-flow tools but allows bash", () => {
+    for (const id of ["task", "question", "actor", "skill", "plan_exit", "exec", "mcp_tool_search"]) {
       expect(TOOL_SCRIPT_EXCLUDED.has(id)).toBe(true)
     }
+    expect(TOOL_SCRIPT_EXCLUDED.has("bash")).toBe(false)
+  })
+
+  test("renders exec_command as an alias for bash", () => {
+    const text = renderToolScriptDeclarations([fakeDef("bash", async () => "x")])
+    expect(text).toContain("bash(input:")
+    expect(text).toContain("exec_command(input:")
+    expect(text).toContain("Alias for bash")
+  })
+
+})
+
+describe("exec MCP dispatch", () => {
+  // Mimics the SessionPrompt-wrapped MCP execute: resolves with the normalized
+  // {output, metadata, attachments} shape (permission/hooks/truncation already
+  // applied by the wrapper), rejects on tool failure.
+  function fakeMcpTool(execute: (args: any) => Promise<any>) {
+    return {
+      description: "fake mcp tool",
+      inputSchema: z.object({}),
+      execute,
+    }
+  }
+
+  test("MCP tool is callable and returns output text", async () => {
+    const mcp = {
+      srv_search: fakeMcpTool(async (args) => ({
+        output: `found: ${args.query}`,
+        metadata: { mcp: { isError: false } },
+        attachments: [],
+      })),
+    }
+    const result = await runToolScript(
+      `const r = await tools.srv_search({ query: "hello" }); return r.output`,
+      [],
+      undefined,
+      { mcp },
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain("found: hello")
+  })
+
+  test("structuredContent crosses into the guest as parsed `structured`", async () => {
+    const mcp = {
+      srv_data: fakeMcpTool(async () => ({
+        output: "3 items",
+        metadata: { mcp: { isError: false, structuredContent: { items: [1, 2, 3], total: 3 } } },
+        attachments: [],
+      })),
+    }
+    const result = await runToolScript(
+      `const r = await tools.srv_data({});
+       return { total: r.structured.total, doubled: r.structured.items.map((x) => x * 2) }`,
+      [],
+      undefined,
+      { mcp },
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain('"total": 3')
+    expect(result.output).toContain("4")
+    expect(result.output).toContain("6")
+  })
+
+  test("MCP failure rejects catchably inside the guest", async () => {
+    const mcp = {
+      srv_fail: fakeMcpTool(async () => {
+        throw new Error("server exploded")
+      }),
+    }
+    const result = await runToolScript(
+      `try { await tools.srv_fail({}) } catch (e) { return "caught: " + e.message }`,
+      [],
+      undefined,
+      { mcp },
+    )
+    expect(result.metadata.status).toBe("completed")
+    expect(result.output).toContain("caught: srv_fail: server exploded")
+  })
+
+  test("builtin id wins on collision with an MCP tool", async () => {
+    const mcp = {
+      echo: fakeMcpTool(async () => ({ output: "mcp version", metadata: {}, attachments: [] })),
+    }
+    const result = await runToolScript(
+      `const r = await tools.echo({ value: "x" }); return r.output`,
+      [fakeDef("echo", async () => "builtin version")],
+      undefined,
+      { mcp },
+    )
+    expect(result.output).toContain("builtin version")
+  })
+
+  test("attachments are dropped with a note", async () => {
+    const mcp = {
+      srv_img: fakeMcpTool(async () => ({
+        output: "here is your chart",
+        metadata: { mcp: { isError: false } },
+        attachments: [{ mime: "image/png", url: "data:image/png;base64,xxxx" }],
+      })),
+    }
+    const result = await runToolScript(
+      `const r = await tools.srv_img({}); return r.output`,
+      [],
+      undefined,
+      { mcp },
+    )
+    expect(result.output).toContain("here is your chart")
+    expect(result.output).toContain("non-text attachment(s) dropped")
+  })
+
+  test("MCP calls count against the tool call budget", async () => {
+    const mcp = {
+      srv_a: fakeMcpTool(async () => ({ output: "a", metadata: {}, attachments: [] })),
+    }
+    const result = await runToolScript(
+      `for (let i = 0; i < 3; i++) await tools.srv_a({}); return "done"`,
+      [],
+      undefined,
+      { mcp, maxToolCalls: 2 },
+    )
+    expect(result.metadata.status).not.toBe("completed")
+    expect(result.output).toContain("budget exceeded")
+  })
+
+  test("whitelist filters MCP tools too", async () => {
+    const mcp = {
+      srv_blocked: fakeMcpTool(async () => ({ output: "should not run", metadata: {}, attachments: [] })),
+    }
+    const result = await runToolScript(
+      `try { await tools.srv_blocked({}) } catch (e) { return "denied: " + e.message }`,
+      [],
+      undefined,
+      { mcp, toolWhitelist: ["exec"] },
+    )
+    expect(result.output).toContain("denied:")
+    expect(result.output).toContain("unknown tool")
   })
 })
