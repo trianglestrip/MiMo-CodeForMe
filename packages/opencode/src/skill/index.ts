@@ -279,7 +279,7 @@ export const layer = Layer.effect(
         const ctx = yield* InstanceState.context
         const disc = yield* discoverSkills(config, discovery, fsys, ctx.directory, ctx.worktree)
         const s: State = { skills: {}, dirs: new Set() }
-        yield* loadSkills(s, { matches: disc.matches, dirs: disc.dirs }, bus)
+        yield* loadSkills(s, disc, bus)
         return s
       })
 
