@@ -11,6 +11,7 @@ import { ReadTool } from "./read"
 import { ActorTool } from "./actor"
 import { TaskTool } from "./task"
 import { CronTool } from "./cron"
+import { SessionTool } from "./session"
 import { WorkflowTool } from "./workflow"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
@@ -23,11 +24,14 @@ import { type ToolContext as PluginToolContext, type ToolDefinition } from "@mim
 import z from "zod"
 import { Plugin } from "../plugin"
 import { Provider } from "../provider"
+import { Worktree } from "../worktree"
+import { Git } from "../git"
 import { ProviderID, type ModelID } from "../provider/schema"
 import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util"
+import { errorMessage } from "@/util/error"
 import { LspTool } from "./lsp"
 import * as Truncate from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
@@ -64,6 +68,8 @@ import { shellWrap } from "./shell-wrap"
 import * as BashInteractive from "./bash-interactive"
 import { resolveInvocationStyle } from "./invocation-style"
 import { BuiltinWorkflow } from "@/workflow/builtin"
+import { ToolScriptTool, renderToolScriptDeclarations } from "./tool-script"
+import { toolScriptRegistry } from "./tool-script-ref"
 
 const log = Log.create({ service: "tool.registry" })
 
@@ -113,6 +119,10 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ToolRegistry") {}
 
+// SessionTool's `dashboard` verb correlates worktrees via Git.Service. Git is a
+// leaf layer (needs only ChildProcessSpawner) with no shared state, so the
+// registry self-provides it rather than leaking Git.Service as an external
+// requirement onto every consumer (production wiring + ~20 test harnesses).
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -145,7 +155,9 @@ export const layer = Layer.effect(
     const memorytool = yield* MemoryTool
     const tasktool = yield* TaskTool
     const crontool = yield* CronTool
+    const sessiontool = yield* SessionTool
     const workflowtool = yield* WorkflowTool
+    const toolscript = yield* ToolScriptTool
     const agent = yield* Agent.Service
 
     const state = yield* InstanceState.make<State>(
@@ -192,7 +204,14 @@ export const layer = Layer.effect(
           const namespace = path.basename(match, path.extname(match))
           // `match` is an absolute filesystem path from `Glob.scanSync(..., { absolute: true })`.
           // Import it as `file://` so Node on Windows accepts the dynamic import.
-          const mod = yield* Effect.promise(() => import(`${pathToFileURL(match).href}?v=${Date.now()}`))
+          const mod = yield* Effect.tryPromise({
+            try: () => import(`${pathToFileURL(match).href}?v=${Date.now()}`),
+            catch: (err) => err,
+          }).pipe(Effect.catch((err) => {
+            log.error("failed to load file tool, skipping", { path: match, error: errorMessage(err) })
+            return Effect.succeed(undefined)
+          }))
+          if (!mod) continue
           for (const [id, def] of Object.entries<ToolDefinition>(mod)) {
             custom.push(fromPlugin(id === "default" ? namespace : `${namespace}_${id}`, def))
           }
@@ -233,7 +252,9 @@ export const layer = Layer.effect(
           history: Tool.init(historytool),
           task: Tool.init(tasktool),
           cron: Tool.init(crontool),
+          session: Tool.init(sessiontool),
           workflow: Tool.init(workflowtool),
+          toolscript: Tool.init(toolscript),
         })
 
         return {
@@ -261,7 +282,9 @@ export const layer = Layer.effect(
             tool.memory,
             tool.history,
             tool.task,
+            tool.toolscript,
             ...(Flag.MIMOCODE_EXPERIMENTAL_CRON ? [tool.cron] : []),
+            ...(Flag.MIMOCODE_EXPERIMENTAL_ORCHESTRATOR ? [tool.session] : []),
             ...(Flag.MIMOCODE_EXPERIMENTAL_WORKFLOW_TOOL ? [tool.workflow] : []),
           ],
           actor: tool.actor,
@@ -276,6 +299,10 @@ export const layer = Layer.effect(
       const builtins = s.builtin.filter((t) => !customIds.has(t.id))
       return [...builtins, ...s.custom] as Tool.Def[]
     })
+
+    // Late-bound ref (see tool-script-ref.ts): tool_script dispatches guest RPC
+    // calls through the same def list the agent sees, without a module cycle.
+    toolScriptRegistry.current = all
 
     const ids: Interface["ids"] = Effect.fn("ToolRegistry.ids")(function* () {
       return (yield* all()).map((tool) => tool.id)
@@ -302,6 +329,10 @@ export const layer = Layer.effect(
 
     const describeWorkflow = Effect.fn("ToolRegistry.describeWorkflow")(function* () {
       return renderWorkflowCatalog()
+    })
+
+    const describeToolScript = Effect.fn("ToolRegistry.describeToolScript")(function* () {
+      return renderToolScriptDeclarations(yield* all())
     })
 
     const describeTask = Effect.fn("ToolRegistry.describeTask")(function* (agent: Agent.Info) {
@@ -347,6 +378,12 @@ export const layer = Layer.effect(
         filtered = filtered.filter((tool) => tool.id === "invalid" || allowed.has(tool.id))
       }
 
+      // The `session` tool is orchestrator-only. Orchestrator is a
+      // full-capability agent (no toolAllowlist), so gate on the agent name
+      // rather than an allowlist: every other agent — primaries without an
+      // allowlist (build/plan/compose) and subagents — must not see `session`.
+      filtered = filtered.filter((tool) => tool.id !== "session" || input.agent.name === "orchestrator")
+
       const cfg = yield* config.get()
       const resolveStyle = (toolId: string): "json" | "shell" => resolveInvocationStyle(cfg.tool, toolId)
 
@@ -373,6 +410,7 @@ export const layer = Layer.effect(
               tool.id === ActorTool.id ? yield* describeTask(input.agent) : undefined,
               tool.id === SkillTool.id ? yield* describeSkill(input.agent) : undefined,
               tool.id === WorkflowTool.id ? yield* describeWorkflow() : undefined,
+              tool.id === ToolScriptTool.id ? yield* describeToolScript() : undefined,
             ]
               .filter(Boolean)
               .join("\n"),
@@ -398,7 +436,7 @@ export const layer = Layer.effect(
 
     return Service.of({ ids, all, named, tools, reload })
   }),
-)
+).pipe(Layer.provide(Git.defaultLayer))
 
 export const defaultLayer = Layer.suspend(() =>
   layer.pipe(
@@ -419,7 +457,7 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(CrossSpawnSpawner.defaultLayer),
     Layer.provide(Ripgrep.defaultLayer),
     Layer.provide(Truncate.defaultLayer),
-    Layer.provide(Layer.mergeAll(ActorRegistry.defaultLayer, ActorWaiter.defaultLayer)),
+    Layer.provide(Layer.mergeAll(ActorRegistry.defaultLayer, ActorWaiter.defaultLayer, Worktree.defaultLayer)),
     Layer.provide(Team.defaultLayer),
     Layer.provide(
       Layer.mergeAll(

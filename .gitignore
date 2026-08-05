@@ -47,7 +47,6 @@ tsconfig.tsbuildinfo
 .claude/
 *.pid
 .mimo-worktrees
-.mimocode/
 
 # experiment run artifacts (regenerated per run, not source)
 experiment/*.log
@@ -61,3 +60,5 @@ experiment/last-outcome.json
 
 # temp
 temp/
+__pycache__
+Thumbs.db

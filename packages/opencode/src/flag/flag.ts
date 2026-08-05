@@ -66,6 +66,20 @@ export const Flag = {
   MIMOCODE_DISABLE_TERMINAL_TITLE: truthy("MIMOCODE_DISABLE_TERMINAL_TITLE"),
   MIMOCODE_SHOW_TTFD: truthy("MIMOCODE_SHOW_TTFD"),
   MIMOCODE_PERMISSION: process.env["MIMOCODE_PERMISSION"],
+
+  // Defaults to false. When false, the bash tool intercepts irreversible
+  // deletion commands (rm, rmdir, unlink, shred, del, erase, rd, remove-item,
+  // and git destructive subcommands like reset --hard / clean -f / branch -D /
+  // worktree remove / push --force / stash drop|clear / tag -d) and forces an
+  // extra permission prompt with permission="bash_delete" — separate from the
+  // normal bash-permission ask so it can't be silently pre-approved by a broad
+  // `bash: allow` rule. Set MIMOCODE_AUTO_APPROVE_DELETE=true to trust the
+  // model with deletes and skip the second confirmation.
+  MIMOCODE_AUTO_APPROVE_DELETE: truthy("MIMOCODE_AUTO_APPROVE_DELETE"),
+  // Set by the TUI's --dangerously-skip-permissions flag. When truthy, an
+  // allow-all base ruleset is injected UNDER the user's config permission so
+  // every tool auto-approves unless the user explicitly denied it.
+  MIMOCODE_DANGEROUSLY_SKIP_PERMISSIONS: truthy("MIMOCODE_DANGEROUSLY_SKIP_PERMISSIONS"),
   MIMOCODE_DISABLE_DEFAULT_PLUGINS: truthy("MIMOCODE_DISABLE_DEFAULT_PLUGINS"),
   MIMOCODE_DISABLE_LSP_DOWNLOAD: truthy("MIMOCODE_DISABLE_LSP_DOWNLOAD"),
   MIMOCODE_ENABLE_EXPERIMENTAL_MODELS: truthy("MIMOCODE_ENABLE_EXPERIMENTAL_MODELS"),
@@ -75,6 +89,10 @@ export const Flag = {
   MIMOCODE_OUTPUT_LENGTH_CONTINUATION_LIMIT: number("MIMOCODE_OUTPUT_LENGTH_CONTINUATION_LIMIT") ?? 3,
   MIMOCODE_INVALID_OUTPUT_CONTINUATION_LIMIT: number("MIMOCODE_INVALID_OUTPUT_CONTINUATION_LIMIT") ?? 2,
   MIMOCODE_TEXT_TOOL_CALL_RETRY_LIMIT: number("MIMOCODE_TEXT_TOOL_CALL_RETRY_LIMIT") ?? 2,
+  // Empty/no-op tool-call loop guard: number of soft nudges (remind → replan)
+  // before the harness hard-halts the turn. N consecutive empty steps beyond
+  // this many recovery attempts terminates the turn. Mirrors TEXT_NGRAM_MAX_RECOVERY.
+  MIMOCODE_EMPTY_STEP_MAX_RECOVERY: number("MIMOCODE_EMPTY_STEP_MAX_RECOVERY") ?? 2,
 
   // Consecutive-block repetition detection for streamed reasoning + text.
   // A block of at least N tokens repeating REPEAT_THRESHOLD times consecutively
@@ -83,10 +101,13 @@ export const Flag = {
   MIMOCODE_TEXT_REPEAT_THRESHOLD: number("MIMOCODE_TEXT_REPEAT_THRESHOLD") ?? 20,
   MIMOCODE_TEXT_WINDOW_TOKENS: number("MIMOCODE_TEXT_WINDOW_TOKENS") ?? 500,
 
-  // Caps applied to image attachments before a prompt is sent. Both default to
-  // undefined (no limit). MIMOCODE_MAX_PROMPT_IMAGES bounds how many images may
-  // be sent per request (oldest excess images are dropped); MIMOCODE_MAX_PROMPT_IMAGE_SIZE
-  // bounds the decoded byte size of a single image. Values must be positive integers.
+  // Caps applied to image attachments before a prompt is sent.
+  // MIMOCODE_MAX_PROMPT_IMAGES (default undefined = no count limit) bounds how
+  // many images may be sent per request (oldest excess images are dropped).
+  // MIMOCODE_MAX_PROMPT_IMAGE_SIZE overrides the default per-image byte cap
+  // (DEFAULT_MAX_IMAGE_BYTES ~4.5 MB, kept under the provider 5 MB hard limit);
+  // oversized images are recompressed under the cap, or stripped to a text
+  // placeholder when they can't be compressed. Values must be positive integers.
   MIMOCODE_MAX_PROMPT_IMAGES: number("MIMOCODE_MAX_PROMPT_IMAGES"),
   MIMOCODE_MAX_PROMPT_IMAGE_SIZE: number("MIMOCODE_MAX_PROMPT_IMAGE_SIZE"),
   MIMOCODE_MIMO_ONLY,
@@ -106,6 +127,13 @@ export const Flag = {
   MIMOCODE_DISABLE_EXTERNAL_SKILLS,
   MIMOCODE_DISABLE_CODEX_SKILLS: MIMOCODE_DISABLE_EXTERNAL_SKILLS || truthy("MIMOCODE_DISABLE_CODEX_SKILLS"),
   MIMOCODE_DISABLE_OPENCODE_SKILLS: MIMOCODE_DISABLE_EXTERNAL_SKILLS || truthy("MIMOCODE_DISABLE_OPENCODE_SKILLS"),
+
+  // Defaults to false. When enabled, skill-source commands appear in the `/`
+  // autocomplete dropdown alongside user commands and MCP prompts. Skills are
+  // surfaced in `/` completion by default; set MIMOCODE_DISABLE_SLASH_SKILLS=1
+  // to hide them and fall back to the `/skills` picker + model-driven
+  // invocation only.
+  MIMOCODE_DISABLE_SLASH_SKILLS: truthy("MIMOCODE_DISABLE_SLASH_SKILLS"),
   MIMOCODE_FAKE_VCS: process.env["MIMOCODE_FAKE_VCS"],
 
   // When enabled, skips all git subprocess calls during project discovery
@@ -117,6 +145,10 @@ export const Flag = {
   MIMOCODE_SERVER_PASSWORD: process.env["MIMOCODE_SERVER_PASSWORD"],
   MIMOCODE_SERVER_USERNAME: process.env["MIMOCODE_SERVER_USERNAME"],
   MIMOCODE_ENABLE_QUESTION_TOOL: truthy("MIMOCODE_ENABLE_QUESTION_TOOL"),
+
+  // Defaults to true. Set MIMOCODE_ENABLE_TRY_BEST_HANDOFF=false (or 0) to
+  // disable try-best loop detection, automatic turn pausing, and handoff UI.
+  MIMOCODE_ENABLE_TRY_BEST_HANDOFF: !falsy("MIMOCODE_ENABLE_TRY_BEST_HANDOFF"),
 
   // Defaults to false. The edit tool does pure exact-string matching with
   // explicit error signals. Set MIMOCODE_ENABLE_FUZZY_EDIT=true to opt into the
@@ -164,6 +196,11 @@ export const Flag = {
   MIMOCODE_EXPERIMENTAL_OXFMT: MIMOCODE_EXPERIMENTAL || truthy("MIMOCODE_EXPERIMENTAL_OXFMT"),
   MIMOCODE_EXPERIMENTAL_LSP_TY: truthy("MIMOCODE_EXPERIMENTAL_LSP_TY"),
   MIMOCODE_EXPERIMENTAL_LSP_TOOL: MIMOCODE_EXPERIMENTAL || truthy("MIMOCODE_EXPERIMENTAL_LSP_TOOL"),
+  // Defaults to OFF (opt-in): the Orchestrator primary mode — a general
+  // coordinator that delegates to child sessions via the `session` tool, with a
+  // global singleton workspace and child permission-approval routing. Enable with
+  // MIMOCODE_EXPERIMENTAL_ORCHESTRATOR=true (or the umbrella MIMOCODE_EXPERIMENTAL).
+  MIMOCODE_EXPERIMENTAL_ORCHESTRATOR: MIMOCODE_EXPERIMENTAL || truthy("MIMOCODE_EXPERIMENTAL_ORCHESTRATOR"),
   // Defaults to true: dynamic workflow + built-in deep-research are on by default.
   // Set MIMOCODE_EXPERIMENTAL_WORKFLOW_TOOL=false to opt out. The env-var name is
   // kept for backwards compat (long-running experiments still pass it as `1`).
@@ -213,10 +250,17 @@ export const Flag = {
     return truthy("MIMOCODE_DISABLE_COMPOSE_SKILLS")
   },
   // Disables user-facing builtin skills shipped with the binary (e.g.
-  // self-extend). Does not affect compose skills — the two sets are
+  // evolve). Does not affect compose skills — the two sets are
   // independent and non-overlapping.
   get MIMOCODE_DISABLE_BUILTIN_SKILLS() {
     return truthy("MIMOCODE_DISABLE_BUILTIN_SKILLS")
+  },
+  // Disables the built-in official skills (docx, pdf, pptx, xlsx,
+  // html-to-video-pipeline) while keeping the rest of the builtin bundle
+  // available. Defaults to false (all skills are extracted and loaded). Set
+  // MIMOCODE_DISABLE_OFFICIAL_SKILLS=true to skip them.
+  get MIMOCODE_DISABLE_OFFICIAL_SKILLS() {
+    return truthy("MIMOCODE_DISABLE_OFFICIAL_SKILLS")
   },
   get MIMOCODE_DISABLE_PROJECT_CONFIG() {
     return truthy("MIMOCODE_DISABLE_PROJECT_CONFIG")

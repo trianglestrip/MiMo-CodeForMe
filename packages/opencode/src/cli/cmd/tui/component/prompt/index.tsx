@@ -1,4 +1,4 @@
-import { BoxRenderable, RGBA, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes } from "@opentui/core"
+import { BoxRenderable, RGBA, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, TextAttributes } from "@opentui/core"
 import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
@@ -32,10 +32,12 @@ import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util"
 import { formatDuration } from "@/util/format"
+import { SessionRetry } from "@/session/retry"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
+import { DialogPrompt } from "../../ui/dialog-prompt"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { createFadeIn } from "../../util/signal"
@@ -189,7 +191,7 @@ export function Prompt(props: PromptProps) {
 
   function voiceSwitchAgent(name: string) {
     const match = local.agent.list().find((x) => x.name.toLowerCase() === name.toLowerCase())
-    if (match) local.agent.set(match.name)
+    if (match) local.agent.userSwitch(match.name)
     else toast.show({ message: t("tui.voice.error.unknown_agent", { name: name }), variant: "error", duration: 3000 })
   }
 
@@ -505,6 +507,11 @@ export function Prompt(props: PromptProps) {
     ),
   )
 
+  // Derive sticky mode from whether session has messages
+  createEffect(() => {
+    local.agent.setSessionHasMessages(!!lastUserMessage())
+  })
+
   // Initialize agent/model/variant from last user message when session changes
   let syncedSessionID: string | undefined
   createEffect(() => {
@@ -513,7 +520,6 @@ export function Prompt(props: PromptProps) {
 
     if (sessionID !== syncedSessionID) {
       if (!sessionID || !msg) return
-
       syncedSessionID = sessionID
 
       // Only set agent if it's a primary agent (not a subagent)
@@ -1073,6 +1079,23 @@ export function Prompt(props: PromptProps) {
     try {
 
     let sessionID = props.sessionID
+    // In orchestrator mode the single global root session was already resolved
+    // (find-or-create) on mode entry and stashed. Submitting from the home
+    // composer must land the first message INTO that root rather than creating a
+    // duplicate root session. Only applies when the composer has no bound
+    // sessionID (home view) and the current agent is orchestrator.
+    if (sessionID == null && agent.name === "orchestrator") {
+      const stashed = local.orchestrator.sessionID()
+      if (stashed) {
+        sessionID = stashed
+      } else {
+        // Root not resolved yet (mode-entry find-or-create still in flight).
+        // Do NOT fall through to session.create — that would spawn a duplicate
+        // orchestrator root. Ask the user to retry in a moment instead.
+        toast.show({ message: "Orchestrator session is still initializing, try again", variant: "warning" })
+        return false
+      }
+    }
     if (sessionID == null) {
       const res = await sdk.client.session.create({ workspace: props.workspaceID })
 
@@ -1128,6 +1151,36 @@ export function Prompt(props: PromptProps) {
         command: inputText,
       })
       setStore("mode", "normal")
+    } else if (inputText.startsWith("/btw ")) {
+      // Inline side-question form: `/btw <question>` on the prompt line. Client
+      // slashes match the exact `/btw` token and drop args, so handle the
+      // arg-bearing form here. Show a busy/spinner dialog immediately for
+      // instant feedback across the blocking fork-query, then swap in the
+      // answer. READ-ONLY + EPHEMERAL: render the answer in a dismissible
+      // dialog, never inject it into the conversation.
+      const question = inputText.slice("/btw ".length).trim()
+      if (question)
+        void DialogPrompt.busy(
+          dialog,
+          "/btw",
+          question,
+          (active) =>
+            sdk.client.session
+              .ask({ sessionID, question })
+              .then((res) => {
+                if (!active()) return
+                return DialogAlert.show(dialog, "/btw", res.data?.answer ?? "(no answer)")
+              })
+              .catch((err) => {
+                if (!active()) return
+                dialog.clear()
+                toast.show({
+                  message: err instanceof Error ? err.message : "Failed to ask side question",
+                  variant: "error",
+                })
+              }),
+          { busyText: t("tui.command.session.ask.busy") },
+        )
     } else if (clientSlash) {
       clientSlash.onSelect?.()
     } else if (
@@ -1276,6 +1329,11 @@ export function Prompt(props: PromptProps) {
           }
         }
         if (mime.startsWith("image/") || mime === "application/pdf") {
+          if (mime.startsWith("image/") && !activeModelSupportsImage()) {
+            insertFileReference(filepath)
+            toast.show({ message: t("tui.paste.image.fallback_path"), variant: "warning", duration: 5000 })
+            return
+          }
           const content = await Filesystem.readArrayBuffer(filepath)
             .then((buffer) => Buffer.from(buffer).toString("base64"))
             .catch(() => {})
@@ -1309,16 +1367,62 @@ export function Prompt(props: PromptProps) {
     }, 0)
   }
 
+  function activeModelSupportsImage() {
+    const current = local.model.current()
+    if (!current) return false
+    const provider = sync.data.provider.find((p) => p.id === current.providerID)
+    return provider?.models[current.modelID]?.capabilities?.input?.image ?? false
+  }
+
+  function insertFileReference(filepath: string) {
+    const filename = path.basename(filepath)
+    const currentOffset = input.visualCursor.offset
+    const extmarkStart = currentOffset
+    const virtualText = `@${filename}`
+    const extmarkEnd = extmarkStart + virtualText.length
+    input.insertText(virtualText + " ")
+    const extmarkId = input.extmarks.create({
+      start: extmarkStart,
+      end: extmarkEnd,
+      virtual: true,
+      styleId: fileStyleId,
+      typeId: promptPartTypeId,
+    })
+    setStore(
+      produce((draft) => {
+        const partIndex = draft.prompt.parts.length
+        draft.prompt.parts.push({
+          type: "file" as const,
+          mime: "text/plain",
+          filename,
+          url: `file://${filepath}`,
+          source: {
+            type: "file",
+            path: filepath,
+            text: { start: extmarkStart, end: extmarkEnd, value: virtualText },
+          },
+        })
+        draft.extmarkToPartIndex.set(extmarkId, partIndex)
+      }),
+    )
+  }
+
   async function pasteFromClipboard() {
     if (props.disabled) return
     const content = await Clipboard.read()
     if (!content) return
     if (content.mime.startsWith("image/")) {
-      await pasteAttachment({
-        filename: "clipboard",
-        mime: content.mime,
-        content: content.data,
-      })
+      if (activeModelSupportsImage()) {
+        await pasteAttachment({
+          filename: "clipboard",
+          mime: content.mime,
+          content: content.data,
+        })
+        return
+      }
+      const filepath = await Clipboard.spillImage(content)
+      insertFileReference(filepath)
+      toast.show({ message: t("tui.paste.image.fallback_path"), variant: "warning", duration: 5000 })
       return
     }
     await pastePlainText(content.data.replace(/\r\n/g, "\n").replace(/\r/g, "\n"))
@@ -1794,20 +1898,33 @@ export function Prompt(props: PromptProps) {
                       }
                     }
 
-                    const retryText = () => {
+                    // A rate-limit gets a clean, distinct label instead of the
+                    // raw provider message; other errors show the truncated
+                    // clean message. The attempt/countdown is a SEPARATE styled
+                    // status segment, not concatenated into the message string,
+                    // so it renders as structure rather than raw text. See T30.
+                    const isRateLimit = createMemo(() => {
+                      const r = retry()
+                      return r ? SessionRetry.isRateLimitMessage(r.message) : false
+                    })
+                    const label = createMemo(() => (isRateLimit() ? "Rate limited" : message()))
+                    const statusText = createMemo(() => {
                       const r = retry()
                       if (!r) return ""
-                      const baseMessage = message()
-                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
                       const duration = formatDuration(seconds())
-                      const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                      return baseMessage + truncatedHint + retryInfo
-                    }
+                      return `attempt #${r.attempt}${duration ? ` · retrying in ${duration}` : " · retrying"}`
+                    })
 
                     return (
                       <Show when={retry()}>
-                        <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error}>{retryText()}</text>
+                        <box flexDirection="row" gap={1} onMouseUp={handleMessageClick}>
+                          <text fg={isRateLimit() ? theme.warning : theme.error} attributes={TextAttributes.BOLD}>
+                            {label()}
+                          </text>
+                          <Show when={isTruncated()}>
+                            <text fg={theme.textMuted}>(click to expand)</text>
+                          </Show>
+                          <text fg={theme.textMuted}>{statusText()}</text>
                         </box>
                       </Show>
                     )
