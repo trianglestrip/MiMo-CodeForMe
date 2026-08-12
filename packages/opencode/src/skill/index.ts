@@ -173,13 +173,20 @@ const scan = Effect.fnUntraced(function* (
   }
 })
 
-const discoverSkills = Effect.fnUntraced(function* (
-  config: Config.Interface,
-  discovery: Discovery.Interface,
-  fsys: AppFileSystem.Interface,
-  directory: string,
-  worktree: string,
-) {
+// Directory-independent skill discovery: builtin + compose bundles and the home
+// external dirs. These inputs are process-constant (version-keyed bundles whose
+// extraction is marker-guarded, immutable feature flags, a fixed home dir), so
+// the result is computed once per process and shared across every directory.
+// This is the dominant redundant cost when the frontend disposes all instances
+// and then re-queries /agent for several directories in a burst: without this
+// cache each directory bootstrap re-scans the ~38 builtin skills and re-runs the
+// bundle extraction checks. The cache intentionally survives Instance.disposeAll
+// (it is not tied to a per-directory lifecycle); only a process restart, which
+// re-reads the bundles, clears it.
+let globalDiscoveryCache: DiscoveryState | undefined
+
+const discoverGlobalSkills = Effect.fnUntraced(function* (fsys: AppFileSystem.Interface) {
+  if (globalDiscoveryCache) return globalDiscoveryCache
   const state: ScanState = { matches: new Set(), dirs: new Set() }
   const bundledRoots: string[] = []
 
@@ -230,6 +237,37 @@ const discoverSkills = Effect.fnUntraced(function* (
       if (!(yield* fsys.isDir(root))) continue
       yield* scan(state, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "global" })
     }
+  }
+
+  globalDiscoveryCache = {
+    matches: Array.from(state.matches),
+    dirs: Array.from(state.dirs),
+    bundledRoots,
+  }
+  return globalDiscoveryCache
+})
+
+const discoverSkills = Effect.fnUntraced(function* (
+  config: Config.Interface,
+  discovery: Discovery.Interface,
+  fsys: AppFileSystem.Interface,
+  directory: string,
+  worktree: string,
+) {
+  const cached = yield* discoverGlobalSkills(fsys)
+  const state: ScanState = {
+    matches: new Set(cached.matches),
+    dirs: new Set(cached.dirs),
+  }
+  const bundledRoots = [...cached.bundledRoots]
+
+  if (!Flag.MIMOCODE_DISABLE_EXTERNAL_SKILLS) {
+    const externalDirs = EXTERNAL_DIRS.filter((dir) => {
+      if (dir === ".claude" && Flag.MIMOCODE_DISABLE_CLAUDE_CODE_SKILLS) return false
+      if (dir === ".codex" && Flag.MIMOCODE_DISABLE_CODEX_SKILLS) return false
+      if (dir === ".opencode" && Flag.MIMOCODE_DISABLE_OPENCODE_SKILLS) return false
+      return true
+    })
 
     const upDirs = yield* fsys
       .up({ targets: externalDirs, start: directory, stop: worktree })
