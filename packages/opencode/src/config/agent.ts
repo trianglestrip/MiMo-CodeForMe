@@ -8,7 +8,6 @@ import { Log } from "../util"
 import { NamedError } from "@mimo-ai/shared/util/error"
 import { Glob } from "@mimo-ai/shared/util/glob"
 import { configEntryNameFromPath } from "./entry-name"
-import { InvalidError } from "./error"
 import * as ConfigMarkdown from "./markdown"
 import { ConfigModelID } from "./model-id"
 import { ConfigPermission } from "./permission"
@@ -156,7 +155,14 @@ export async function load(dir: string) {
       result[config.name] = parsed.data
       continue
     }
-    throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+    const message = `Invalid agent config ${item}: ${parsed.error.issues
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ")}`
+    const { Session } = await import("@/session")
+    void Bus.publish(Session.Event.Error, {
+      error: new NamedError.Unknown({ message }).toObject(),
+    })
+    log.error("failed to load agent", { agent: item, issues: parsed.error.issues })
   }
   return result
 }

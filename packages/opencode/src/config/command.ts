@@ -8,7 +8,6 @@ import { Bus } from "@/bus"
 import { zod } from "@/util/effect-zod"
 import { withStatics } from "@/util/schema"
 import { configEntryNameFromPath } from "./entry-name"
-import { InvalidError } from "./error"
 import * as ConfigMarkdown from "./markdown"
 import { ConfigModelID } from "./model-id"
 
@@ -63,7 +62,14 @@ export async function load(dir: string) {
       result[config.name] = parsed.data
       continue
     }
-    throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+    const message = `Invalid command config ${item}: ${parsed.error.issues
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ")}`
+    const { Session } = await import("@/session")
+    void Bus.publish(Session.Event.Error, {
+      error: new NamedError.Unknown({ message }).toObject(),
+    })
+    log.error("failed to load command", { command: item, issues: parsed.error.issues })
   }
   return result
 }
