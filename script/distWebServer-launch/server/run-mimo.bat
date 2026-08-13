@@ -44,6 +44,9 @@ set "PATH=%~dp0tools;%PATH%"
 set "MIMOCODE_MIMO_ONLY=true"
 set "MIMOCODE_DISABLE_EXTERNAL_SKILLS=true"
 set "MIMOCODE_DISABLE_PROJECT_CONFIG=true"
+REM 与 dist 运行版一致：显式加载 .mimocode 配置目录（含 doc-manager MCP 注册），
+REM 因为 DISABLE_PROJECT_CONFIG 会跳过默认的项目 .mimocode 扫描
+if exist "%AGENT_ROOT%\.mimocode" set "MIMOCODE_CONFIG_DIR=%AGENT_ROOT%\.mimocode"
 
 title MiMo 4096
 
