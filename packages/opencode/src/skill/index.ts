@@ -340,11 +340,18 @@ export const layer = Layer.effect(
     // repeatedly (resolveTools, fork agents, checkpoint-writer, …), and each call
     // previously re-discovered and re-loaded every skill file. Skills are
     // effectively static within a session, so memoize per (directory, worktree)
-    // with a short TTL. The TTL bounds staleness: newly added skills become
-    // visible at the next refresh, while a single turn (which can take several
-    // seconds) reuses the snapshot.
+    // with a TTL. The TTL bounds staleness: newly added skills become visible at
+    // the next refresh, while a single turn reuses the snapshot.
+    //
+    // TTL sizing (learned the hard way): a full computeState() scan + SKILL.md
+    // parse takes ~15s on Windows (thousands of bundled skill files, AV
+    // real-time scanning), and consecutive prompt-loop steps are separated by
+    // LLM calls of 5–20s+. A 10s TTL therefore expired before every reuse —
+    // the cache never hit and every step re-scanned (log: repeated
+    // "init count=N"). 60s keeps every step of a turn on the same snapshot
+    // while still picking up newly added skills within a minute.
     const stateCache = new Map<string, { state: State; at: number }>()
-    const STATE_CACHE_TTL_MS = 10_000
+    const STATE_CACHE_TTL_MS = 60_000
     const cachedComputeState = () =>
       Effect.gen(function* () {
         const ctx = yield* InstanceState.context
