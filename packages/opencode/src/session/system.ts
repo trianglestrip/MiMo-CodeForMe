@@ -58,7 +58,11 @@ export function agent(agent: Agent.Info, model: Provider.Model) {
 
 export interface Interface {
   readonly environment: (model: Provider.Model, now: number) => Effect.Effect<string[]>
-  readonly skills: (agent: Agent.Info, model?: SkillSearchModel) => Effect.Effect<string | undefined>
+  readonly skills: (
+    agent: Agent.Info,
+    model?: SkillSearchModel,
+    opts?: { namesOnly?: boolean },
+  ) => Effect.Effect<string | undefined>
   readonly available: (agent?: Agent.Info) => Effect.Effect<Skill.Info[]>
   readonly all: () => Effect.Effect<Skill.Info[]>
 }
@@ -175,10 +179,29 @@ export const layer = Layer.effect(
         return base
       }),
 
-      skills: Effect.fn("SystemPrompt.skills")(function* (agent: Agent.Info, model?: SkillSearchModel) {
+      skills: Effect.fn("SystemPrompt.skills")(function* (
+        agent: Agent.Info,
+        model?: SkillSearchModel,
+        opts?: { namesOnly?: boolean },
+      ) {
         if (Permission.disabled(["skill"], agent.permission).has("skill")) return
 
         const list = yield* skill.modelInvocable(agent)
+
+        // Compact catalog for in-message reminders: the full name+description
+        // list already lives in the skill tool description, so the reminder
+        // only needs the names to avoid duplicating ~18KB per request.
+        if (opts?.namesOnly === true) {
+          return [
+            "Skills provide specialized instructions and workflows for specific tasks.",
+            "Use the skill tool to load a skill when a task matches its description.",
+            "Skill names available in this session: " +
+              list
+                .map((s) => s.name)
+                .sort()
+                .join(", "),
+          ].join("\n")
+        }
 
         if (model && isSkillSearchDisabled(model)) {
           return [

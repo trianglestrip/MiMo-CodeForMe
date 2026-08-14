@@ -336,6 +336,29 @@ export const layer = Layer.effect(
         return s
       })
 
+    // Cached variant: a single prompt loop calls Skill.available/modelInvocable
+    // repeatedly (resolveTools, fork agents, checkpoint-writer, …), and each call
+    // previously re-discovered and re-loaded every skill file. Skills are
+    // effectively static within a session, so memoize per (directory, worktree)
+    // with a short TTL. The TTL bounds staleness: newly added skills become
+    // visible at the next refresh, while a single turn (which can take several
+    // seconds) reuses the snapshot.
+    const stateCache = new Map<string, { state: State; at: number }>()
+    const STATE_CACHE_TTL_MS = 10_000
+    const cachedComputeState = () =>
+      Effect.gen(function* () {
+        const ctx = yield* InstanceState.context
+        const key = `${ctx.directory}|${ctx.worktree}`
+        const hit = stateCache.get(key)
+        const now = Date.now()
+        if (hit && now - hit.at < STATE_CACHE_TTL_MS) return hit.state
+        const s = yield* computeState()
+        stateCache.set(key, { state: s, at: now })
+        // Bounded memory: many directories over a long-lived server.
+        if (stateCache.size > 64) stateCache.clear()
+        return s
+      })
+
     const computeDiscovered = () =>
       Effect.gen(function* () {
         const ctx = yield* InstanceState.context
@@ -343,12 +366,12 @@ export const layer = Layer.effect(
       })
 
     const get = Effect.fn("Skill.get")(function* (name: string) {
-      const s = yield* computeState()
+      const s = yield* cachedComputeState()
       return s.skills[name]
     })
 
     const all = Effect.fn("Skill.all")(function* () {
-      const s = yield* computeState()
+      const s = yield* cachedComputeState()
       return Object.values(s.skills)
     })
 
@@ -360,7 +383,7 @@ export const layer = Layer.effect(
     // Authorization only: `deny` means unusable by anyone, so this is also the
     // set a user slash invocation resolves against.
     const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-      const s = yield* computeState()
+      const s = yield* cachedComputeState()
       let list: Info[] = Object.values(s.skills)
 
       list = list.toSorted((a, b) => a.name.localeCompare(b.name))
@@ -373,7 +396,6 @@ export const layer = Layer.effect(
     const modelInvocable = Effect.fn("Skill.modelInvocable")(function* (agent?: Agent.Info) {
       return (yield* available(agent)).filter((skill) => !skill.disable_model_invocation)
     })
-
     const reload = Effect.fn("Skill.reload")(function* () {
       // No-op: state is always computed fresh on each access; kept for interface compatibility
     })
