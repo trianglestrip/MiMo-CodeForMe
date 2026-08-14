@@ -84,7 +84,19 @@ if not exist "%LAUNCH%\start.bat" (
   echo [ERROR] 找不到 %LAUNCH%\start.bat
   goto BuildFail
 )
+rem backup current runtime config before overwrite; restore after build (keep model/providers/api keys)
+if exist "%OUT%\mimo-config.json" copy /Y "%OUT%\mimo-config.json" "%OUT%\mimo-config.json.pre-build.bak" >nul
 copy /Y "%STANDALONE%\mimo-config.json" "%OUT%\mimo-config.json" >nul
+rem keep the runtime config (model/small_model + provider keys) instead of the template
+if exist "%OUT%\mimo-config.json.pre-build.bak" (
+  copy /Y "%OUT%\mimo-config.json.pre-build.bak" "%OUT%\mimo-config.json" >nul
+  echo [INFO] restored runtime mimo-config.json from .pre-build.bak
+) else (
+  if exist "%OUT%\mimo-config.json.bak" (
+    copy /Y "%OUT%\mimo-config.json.bak" "%OUT%\mimo-config.json" >nul
+    echo [INFO] restored runtime mimo-config.json from .bak
+  )
+)
 xcopy /E /Y /I /Q "%LAUNCH%\*" "%~dp0distWebServer\" >nul
 if errorlevel 1 goto BuildFail
 
