@@ -226,6 +226,27 @@ Don't ask the user about something memory may already record.
 `
 }
 
+/**
+ * Questioning policy injected into any agent whose toolset includes the
+ * `question` tool (main / plan / orchestrator etc.).
+ *
+ * WHY: the web UI renders interactive choice dialogs ONLY for `question.asked`
+ * events. When a model ends its turn with a plain-text list of options
+ * ("1. ... 2. ... Please choose"), no event is emitted and the user never sees
+ * the choices — the turn stalls. This section forces every user decision
+ * through the `question` tool instead.
+ */
+const QUESTIONING_POLICY = `# Asking the user (mandatory)
+
+You have a \`question\` tool for interactive choices. Use it whenever you need a user decision:
+
+- Whenever you need the user to choose between options, confirm a direction, or provide missing parameters, call the \`question\` tool. Do NOT end your turn with a plain-text list of options ("1. ... 2. ... Please choose") waiting for a reply — plain-text questions are not surfaced to the user and stall the conversation.
+- Put each choice in \`options\` as an object with \`label\` (display text) and \`description\` (explanation), a short \`header\`, and the full \`question\`.
+- If you recommend one option, list it first and add "(Recommended)" at the end of its label.
+- Set \`multiple: true\` when more than one option may apply; \`custom\` is on by default so the user can type their own answer — do not add an "Other" catch-all option.
+- Ask as soon as a decision blocks further progress: one early question beats a long chain of guesses built on assumptions.
+`
+
 export type StreamInput = {
   user: MessageV2.User
   sessionID: string
@@ -377,6 +398,16 @@ const live: Layer.Layer<
             `  ${actor.sessionID} | ${title} | ${actor.agent} | ${live === "success" ? "idle" : live}`,
         )
         if (lines.length > 0) system.push(`${ROSTER_HEADER}\n${lines.join("\n")}`)
+      }
+
+      // Questioning policy: only for agents whose toolset actually includes the
+      // `question` tool (no toolAllowlist, or allowlist contains "question").
+      // Subagents with a restricted toolset must not be told to call a tool
+      // they cannot see.
+      const agentAllowlist = input.agent.toolAllowlist
+      const hasQuestionTool = !agentAllowlist || agentAllowlist.includes("question")
+      if (hasQuestionTool) {
+        system.push(QUESTIONING_POLICY)
       }
 
       // Plugins still see the multi-part array (base prompt as [0], memory as a
