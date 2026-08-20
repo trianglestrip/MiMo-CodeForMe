@@ -20,6 +20,7 @@ import { Flag } from "@/flag/flag"
 import { ExperimentalHttpApiServer } from "./httpapi/server"
 import { ProjectRoutes } from "./project"
 import { SessionRoutes } from "./session"
+import { AttachmentRoutes } from "./attachment"
 import { PtyRoutes } from "./pty"
 import { McpRoutes } from "./mcp"
 import { FileRoutes } from "./file"
@@ -57,6 +58,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
     .route("/config", ConfigRoutes())
     .route("/experimental", ExperimentalRoutes())
     .route("/session", SessionRoutes())
+    .route("/session", AttachmentRoutes())
     .route("/permission", PermissionRoutes())
     .route("/workflows", WorkflowRoutes())
     .route("/question", QuestionRoutes())

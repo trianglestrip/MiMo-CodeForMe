@@ -31,6 +31,11 @@ export function get(sessionID: SessionID): string {
   return store.get(sessionID)?.cwd ?? Instance.directory
 }
 
+/** 仅返回显式设置的 cwd 覆盖；未设置时为 undefined（区别于 get() 的 Instance.directory 回退） */
+export function tryGet(sessionID: SessionID): string | undefined {
+  return store.get(sessionID)?.cwd
+}
+
 export function set(sessionID: SessionID, dir: string): void {
   store.set(sessionID, { directory: Instance.directory, cwd: dir })
 }
