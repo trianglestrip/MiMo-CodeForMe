@@ -1,8 +1,12 @@
 @echo off
 chcp 65001 >nul 2>&1
 REM mimo serve :4096; data in distWebServer\.dev-home; cwd = AgentServer root
+REM 可选参数 --low : 以 BelowNormal 优先级 + 绑定能效核(E) 启动 mimo.exe，
+REM 把性能核(P)让给浏览器/IDE，缓解整机卡顿（i7-1255U = 2P+8E，P=LP0-3，E=LP4-11 → 0xFF0）
 
 if /i "%~1"=="/bg" set "AIEP_BG=1"
+if /i "%~1"=="--low" set "MIMO_LOW=1"
+if /i "%~2"=="--low" set "MIMO_LOW=1"
 
 for %%I in ("%~dp0..") do set "DIST=%%~fI"
 for %%I in ("%~dp0..\..\..") do set "AGENT_ROOT=%%~fI"
@@ -48,6 +52,13 @@ REM 与 dist 运行版一致：显式加载 .mimocode 配置目录（含 doc-man
 REM 因为 DISABLE_PROJECT_CONFIG 会跳过默认的项目 .mimocode 扫描
 if exist "%AGENT_ROOT%\.mimocode" set "MIMOCODE_CONFIG_DIR=%AGENT_ROOT%\.mimocode"
 
+REM 性能/隐私优化（缓解 mimo.exe 卡顿）
+REM 注：遥测(MIMOCODE_ENABLE_ANALYSIS)已在 flag.ts 默认关闭，无需此处单独设置
+REM MIMOCODE_DISABLE_CRON=true      : 关闭每秒 setInterval 心跳（cron-bridge 实时读取）
+REM MIMOCODE_DISABLE_AUTOUPDATE=true: 关闭启动期联网查版本
+set "MIMOCODE_DISABLE_CRON=true"
+set "MIMOCODE_DISABLE_AUTOUPDATE=true"
+
 title MiMo 4096
 
 cd /d "%AGENT_ROOT%"
@@ -56,6 +67,11 @@ echo http://127.0.0.1:4096
 echo HOME: %MIMOCODE_HOME%
 echo CWD: %CD%
 
-"%MIMO_EXE%" serve --hostname 127.0.0.1 --port 4096
+if defined MIMO_LOW (
+  echo [INFO] --low 模式：BelowNormal 优先级 + 绑定 E 核（affinity 0xFF0）启动 mimo.exe ...
+  powershell -NoProfile -Command "$p = Start-Process -FilePath '%MIMO_EXE%' -ArgumentList 'serve','--hostname','127.0.0.1','--port','4096' -WorkingDirectory '%AGENT_ROOT%' -PassThru; try { $p.PriorityClass = 'BelowNormal'; $p.ProcessorAffinity = [IntPtr]0xFF0 } catch { Write-Host ('[WARN] 设置优先级/亲和性失败: ' + $_.Exception.Message) }; $p.WaitForExit()"
+) else (
+  "%MIMO_EXE%" serve --hostname 127.0.0.1 --port 4096
+)
 
 if not defined AIEP_BG pause
