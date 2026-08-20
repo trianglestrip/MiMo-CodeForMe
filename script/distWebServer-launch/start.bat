@@ -6,7 +6,9 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 set "ROOT=%CD%"
 set "BG=0"
+set "LOW="
 if /i "%~1"=="/bg" set "BG=1"
+if /i "%~2"=="--low" set "LOW=--low"
 
 if not exist "%ROOT%\server\mimo.exe" (
   echo [ERROR] 缺少 server\mimo.exe，请先运行 buildserve.bat 或 AgentServer\build-mimo.bat
@@ -23,9 +25,9 @@ if not errorlevel 1 (
 
 call "%~dp0stop.bat" /q
 if "!BG!"=="1" (
-  start /B call "%ROOT%\server\run-mimo.bat" /bg
+  start /B call "%ROOT%\server\run-mimo.bat" /bg !LOW!
 ) else (
-  start "" cmd /k call "%ROOT%\server\run-mimo.bat"
+  start "" cmd /k call "%ROOT%\server\run-mimo.bat" !LOW!
 )
 echo [OK] MiMo serve 已启动（后台启动中，前端自动检测连接状态）
 echo      API: http://127.0.0.1:4096/

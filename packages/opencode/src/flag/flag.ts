@@ -58,9 +58,9 @@ export const Flag = {
   // place. Useful when an external tool tails/manages the single log file.
   MIMOCODE_DISABLE_LOG_ROTATION: truthy("MIMOCODE_DISABLE_LOG_ROTATION"),
 
-  // Defaults to true (analytics enabled). Set MIMOCODE_ENABLE_ANALYSIS=false
-  // to opt out of POSTing model_call/tool_call/agent_request metrics.
-  MIMOCODE_ENABLE_ANALYSIS: !falsy("MIMOCODE_ENABLE_ANALYSIS"),
+  // Defaults to false (analytics disabled). Set MIMOCODE_ENABLE_ANALYSIS=true
+  // to opt into POSTing model_call/tool_call/agent_request metrics.
+  MIMOCODE_ENABLE_ANALYSIS: truthy("MIMOCODE_ENABLE_ANALYSIS"),
   MIMOCODE_ALWAYS_NOTIFY_UPDATE: truthy("MIMOCODE_ALWAYS_NOTIFY_UPDATE"),
   MIMOCODE_DISABLE_PRUNE: truthy("MIMOCODE_DISABLE_PRUNE"),
   MIMOCODE_DISABLE_TERMINAL_TITLE: truthy("MIMOCODE_DISABLE_TERMINAL_TITLE"),
