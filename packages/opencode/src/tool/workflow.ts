@@ -7,6 +7,7 @@ import { ConfigCompose } from "../config"
 import { InstanceState } from "@/effect"
 import { workflowRef } from "@/workflow/runtime-ref"
 import { BuiltinWorkflow } from "@/workflow/builtin"
+import { resolveWorkflowScript } from "@/workflow/resolve"
 import { ActorRegistry } from "@/actor/registry"
 import type { SessionID } from "../session/schema"
 
@@ -40,7 +41,7 @@ const runSchema = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      '(optional) Name of a built-in workflow to run (e.g. "deep-research"). Provide EITHER name OR script, not both.',
+      '(optional) Name of a built-in or project-saved workflow to run (e.g. "deep-research"). Provide EITHER name OR script, not both.',
     ),
   script: z
     .string()
@@ -203,7 +204,12 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
             new Error("workflow run: provide either `name` (a built-in) or `script` (inline), not both."),
           )
         }
-        const script = input.name ? BuiltinWorkflow.get(input.name)?.script : input.script
+        const instance = yield* InstanceState.context
+        const script = input.name
+          ? BuiltinWorkflow.get(input.name)?.script ??
+            (yield* Effect.promise(() => resolveWorkflowScript(input.name!, instance.directory, instance.worktree))) ??
+            undefined
+          : input.script
         if (!script) {
           const known = BuiltinWorkflow.list()
             .map((w) => w.name)
@@ -211,7 +217,7 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
           return yield* Effect.fail(
             new Error(
               input.name
-                ? `Unknown built-in workflow "${input.name}". Known: ${known || "(none)"}.`
+                ? `Unknown built-in or project-saved workflow "${input.name}". Known built-ins: ${known || "(none)"}.`
                 : "workflow run requires either `name` (a built-in) or `script` (inline).",
             ),
           )

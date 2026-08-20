@@ -348,6 +348,48 @@ describe("WorkflowTool run", () => {
       ),
   )
 
+  it.live(
+    "run by name resolves a project-saved workflow and starts it (async)",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* ({ dir, llm }) {
+          const { mkdirSync } = yield* Effect.promise(() => import("fs"))
+          const { join } = yield* Effect.promise(() => import("path"))
+          const workflowDir = join(dir, ".mimocode", "workflows")
+          mkdirSync(workflowDir, { recursive: true })
+          yield* Effect.promise(() =>
+            Bun.write(
+              join(workflowDir, "saved-demo.js"),
+              'export const meta = { name: "saved-demo", description: "saved" }\nreturn { ok: true }',
+            ),
+          )
+          const def = yield* Tool.init(yield* WorkflowTool)
+          const session = yield* Session.Service
+          const parent = yield* session.create({
+            title: "saved workflow by name",
+            permission: [{ permission: "*", pattern: "*", action: "allow" }],
+          })
+          yield* llm.text("done")
+          const res = yield* def.execute(
+            { operation: "run", name: "saved-demo", async: true },
+            {
+              sessionID: parent.id,
+              messageID: "msg_test",
+              agent: "main",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata: () => Effect.void,
+              ask: () => Effect.void,
+            } as any,
+          )
+          expect(res.metadata.runID).toBeDefined()
+          expect(res.output).toContain("run_id")
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
   it.live("run rejects when BOTH name and script are given", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {

@@ -6,6 +6,13 @@ import { Identifier } from "@/id/id"
 import { workflowRef } from "@/workflow/runtime-ref"
 import { jsonRequest } from "./trace"
 import type { SessionID } from "@/session/schema"
+import { Effect } from "effect"
+import { Agent } from "@/agent/agent"
+import { Instance } from "@/project/instance"
+import { validateWorkflowGraph } from "@/workflow/graph/validate"
+import { resolveExpertTeamWorkflow } from "@/workflow/graph/resolve"
+import { compileWorkflowGraph } from "@/workflow/graph/compile"
+import { ModelID, ProviderID } from "@/provider/schema"
 
 // Read-only routes (transcript/structure) accept BOTH runID shapes: a top-level
 // run is `wf_` + 26 base62 (Identifier.descending), a nested child workflow is
@@ -39,6 +46,143 @@ export const WorkflowRoutes = lazy(() =>
           if (!runtime) return []
           const query = c.req.valid("query")
           return yield* runtime.list({ sessionID: query.sessionID as SessionID })
+        }),
+    )
+    .post(
+      "/graphs/validate",
+      describeRoute({
+        summary: "Validate a workflow graph",
+        description: "Validate editor-generated workflow graph JSON, including topology and Agent references.",
+        operationId: "workflow.graph.validate",
+        responses: {
+          200: {
+            description: "Validation result",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ ok: z.boolean(), errors: z.array(z.string()).optional() })),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          graph: z.unknown(),
+          teamMemberIds: z.array(z.string()).optional(),
+        }),
+      ),
+      async (c) =>
+        jsonRequest("WorkflowRoutes.graph.validate", c, function* () {
+          const body = c.req.valid("json")
+          const agents = yield* Agent.Service
+          const availableAgentIds = (yield* agents.list()).map((agent) => agent.name)
+          const result = validateWorkflowGraph(body.graph, {
+            teamMemberIds: body.teamMemberIds,
+            availableAgentIds,
+          })
+          return result.ok ? { ok: true } : { ok: false, errors: result.errors }
+        }),
+    )
+    .post(
+      "/teams/:teamID/run",
+      describeRoute({
+        summary: "Run an executable expert team",
+        description:
+          "Resolve the expert team's execution.graphId, validate and compile its workflow graph JSON, then launch it directly in WorkflowRuntime.",
+        operationId: "workflow.team.run",
+        responses: {
+          200: {
+            description: "Started workflow graph run, optionally with a terminal outcome",
+            content: { "application/json": { schema: resolver(z.any()) } },
+          },
+        },
+      }),
+      validator("param", z.object({ teamID: z.string().regex(/^[A-Za-z][A-Za-z0-9._-]*$/, "invalid team id") })),
+      validator(
+        "json",
+        z.object({
+          sessionID: Identifier.schema("session"),
+          input: z.unknown().optional(),
+          parentActorID: z.string().min(1).default("main"),
+          model: z
+            .object({
+              providerID: ProviderID.zod,
+              modelID: ModelID.zod,
+            })
+            .optional(),
+          async: z.boolean().default(true),
+        }),
+      ),
+      async (c) =>
+        jsonRequest("WorkflowRoutes.team.run", c, function* () {
+          const runtime = workflowRef.current
+          if (!runtime) return yield* Effect.fail(new Error("workflow runtime is unavailable"))
+          const params = c.req.valid("param")
+          const body = c.req.valid("json")
+          const agents = yield* Agent.Service
+          const availableAgentIds = (yield* agents.list()).map((agent) => agent.name)
+          const resolved = yield* Effect.promise(() =>
+            resolveExpertTeamWorkflow(params.teamID, Instance.directory, Instance.worktree, availableAgentIds),
+          )
+          const compiled = compileWorkflowGraph(resolved.graph)
+          const started = yield* runtime.start({
+            script: compiled.script,
+            sessionID: body.sessionID as SessionID,
+            parentActorID: body.parentActorID,
+            args: body.input ?? {},
+            model: body.model,
+            workspace: Instance.directory,
+            maxConcurrentAgents: resolved.graph.limits?.maxConcurrentAgents ?? 1,
+            maxLifecycleAgents: resolved.graph.limits?.maxLifecycleAgents,
+            notifyOnTerminal: false,
+            interactive: false,
+          })
+          const base = {
+            runID: started.runID,
+            teamID: resolved.team.id,
+            graphID: resolved.graph.id,
+            graphVersion: resolved.graph.version,
+            graphHash: compiled.graphHash,
+          }
+          if (body.async) return { ...base, status: "running" }
+          const outcome = yield* runtime.wait({ runID: started.runID })
+          return { ...base, outcome }
+        }),
+    )
+    .get(
+      "/:runID/status",
+      validator("param", z.object({ runID: z.string().regex(READ_RUN_ID, "invalid workflow runID") })),
+      async (c) =>
+        jsonRequest("WorkflowRoutes.status", c, function* () {
+          const params = c.req.valid("param")
+          const runtime = workflowRef.current
+          if (!runtime) return { runID: params.runID, status: "unknown" as const }
+          return { runID: params.runID, ...(yield* runtime.status({ runID: params.runID })) }
+        }),
+    )
+    .post(
+      "/:runID/wait",
+      validator("param", z.object({ runID: z.string().regex(READ_RUN_ID, "invalid workflow runID") })),
+      validator("json", z.object({ timeoutMs: z.number().int().positive().max(30_000).default(10_000) })),
+      async (c) =>
+        jsonRequest("WorkflowRoutes.wait", c, function* () {
+          const params = c.req.valid("param")
+          const body = c.req.valid("json")
+          const runtime = workflowRef.current
+          if (!runtime) return { status: "failed" as const, error: "workflow runtime is unavailable" }
+          return yield* runtime.wait({ runID: params.runID, timeoutMs: body.timeoutMs })
+        }),
+    )
+    .post(
+      "/:runID/cancel",
+      validator("param", z.object({ runID: z.string().regex(READ_RUN_ID, "invalid workflow runID") })),
+      async (c) =>
+        jsonRequest("WorkflowRoutes.cancel", c, function* () {
+          const params = c.req.valid("param")
+          const runtime = workflowRef.current
+          if (runtime) yield* runtime.cancel({ runID: params.runID })
+          return { runID: params.runID, cancelled: Boolean(runtime) }
         }),
     )
     .post(
