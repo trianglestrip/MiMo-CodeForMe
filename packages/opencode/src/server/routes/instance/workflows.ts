@@ -141,6 +141,9 @@ export const WorkflowRoutes = lazy(() =>
             maxConcurrentAgents: resolved.graph.limits?.maxConcurrentAgents ?? 1,
             maxLifecycleAgents: resolved.graph.limits?.maxLifecycleAgents,
             notifyOnTerminal: false,
+            // HTTP callers poll status/wait; per-expert actor_notifications
+            // would inject user-role messages and trigger extra main-agent turns.
+            notifyAgentTerminal: false,
             interactive: false,
           })
           const base = {

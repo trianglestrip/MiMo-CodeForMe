@@ -207,6 +207,14 @@ interface StartInput {
    * result as its own tool output, so a parent inbox notification would surface a
    * DUPLICATE completion (and duplicate error text) on the next turn. */
   notifyOnTerminal?: boolean
+  /** Suppress the per-AGENT parent actor_notification every spawned background
+   *  expert sends on terminal. Distinct from notifyOnTerminal (the RUN-level
+   *  completion message): an HTTP-launched graph run's caller observes progress
+   *  by polling status/wait, so without this each completed expert injects a
+   *  user-role notification into the parent session and triggers an extra
+   *  conversational turn. Defaults to true (agents notify) to preserve the
+   *  in-session tool path's behavior. */
+  notifyAgentTerminal?: boolean
   /** Is a HUMAN attached to this launch who can answer a permission prompt? The
    * up-front manifest permission ask uses this to decide `interactive`: a
    * FOREGROUND launch (a real interactive session actor) prompts the human as
@@ -820,6 +828,7 @@ export const layer = Layer.effect(
                 context: "none",
                 tools: o.tools ? [...o.tools] : "INHERIT",
                 background: true,
+                notifyParent: input.notifyAgentTerminal !== false,
                 parentActorID: input.parentActorID,
                 model: resolvedModel,
                 // Register the child in the reclaim set the instant the actor
@@ -951,6 +960,7 @@ export const layer = Layer.effect(
                     context: "none",
                     tools: o.tools ? [...o.tools] : "INHERIT",
                     background: true,
+                    notifyParent: input.notifyAgentTerminal !== false,
                     parentActorID: input.parentActorID,
                     model: resolvedModel,
                     // Same MR104 #2 fix as spawnShared: register the child in the

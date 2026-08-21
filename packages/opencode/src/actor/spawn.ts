@@ -245,6 +245,15 @@ export interface SpawnInput {
    */
   format?: MessageV2.OutputFormat
   /**
+   * Set to false to suppress the parent actor_notification a BACKGROUND child
+   * sends on terminal (completed/failed/cancelled). Callers that observe the
+   * child by other means (e.g. the workflow runtime's HTTP-launched graph runs,
+   * whose callers poll status/wait) use this so each completed expert doesn't
+   * inject a user-role notification message into the parent session and
+   * trigger an extra conversational turn. Default true = today's behavior.
+   */
+  notifyParent?: boolean
+  /**
    * Fired SYNCHRONOUSLY with the freshly-allocated actorID inside the spawn
    * Effect — right after the actor is registered, BEFORE its work fiber detaches
    * (forkWork forks into the actor scope). Lets a caller record the child id the
@@ -383,6 +392,7 @@ export const layer = Layer.effect(
       task: string
       description?: string
       background: boolean
+      notifyParent?: boolean
       model?: { providerID: ProviderID; modelID: ModelID }
       lifecycle: "ephemeral" | "persistent"
       task_id?: string
@@ -424,7 +434,7 @@ export const layer = Layer.effect(
           // emits the single authoritative "cancelled" notification.
           cancelling.has(cancelKey(input.sessionID, input.actorID))
             ? Effect.void
-            : input.background && input.agentType !== "checkpoint-writer"
+            : input.background && input.notifyParent !== false && input.agentType !== "checkpoint-writer"
             ? inbox
                 .send({
                   receiverSessionID: input.parentSessionID,
@@ -808,6 +818,7 @@ export const layer = Layer.effect(
         task: input.task,
         description: input.description,
         background: input.background,
+        notifyParent: input.notifyParent,
         model: input.model,
         lifecycle: input.lifecycle ?? "persistent",
         task_id: input.task_id,
@@ -864,6 +875,7 @@ export const layer = Layer.effect(
         task: taskWithFormat,
         description: input.description,
         background: input.background,
+        notifyParent: input.notifyParent,
         model: input.model,
         lifecycle: input.lifecycle ?? "ephemeral",
         task_id: input.task_id,
