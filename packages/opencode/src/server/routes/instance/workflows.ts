@@ -9,6 +9,7 @@ import type { SessionID } from "@/session/schema"
 import { Effect } from "effect"
 import { Agent } from "@/agent/agent"
 import { Instance } from "@/project/instance"
+import { Session } from "@/session"
 import { validateWorkflowGraph } from "@/workflow/graph/validate"
 import { resolveExpertTeamWorkflow } from "@/workflow/graph/resolve"
 import { compileWorkflowGraph } from "@/workflow/graph/compile"
@@ -120,6 +121,10 @@ export const WorkflowRoutes = lazy(() =>
           if (!runtime) return yield* Effect.fail(new Error("workflow runtime is unavailable"))
           const params = c.req.valid("param")
           const body = c.req.valid("json")
+          // WorkflowPersistence keys runs to the session (FK); a missing session
+          // would otherwise surface as an opaque 500 FOREIGN KEY error.
+          const session = yield* Session.Service
+          yield* session.get(body.sessionID as SessionID)
           const agents = yield* Agent.Service
           const availableAgentIds = (yield* agents.list()).map((agent) => agent.name)
           const resolved = yield* Effect.promise(() =>
@@ -171,7 +176,15 @@ export const WorkflowRoutes = lazy(() =>
           const body = c.req.valid("json")
           const runtime = workflowRef.current
           if (!runtime) return { status: "failed" as const, error: "workflow runtime is unavailable" }
-          return yield* runtime.wait({ runID: params.runID, timeoutMs: body.timeoutMs })
+          const outcome = yield* runtime.wait({ runID: params.runID, timeoutMs: body.timeoutMs })
+          // A long-poll timeout while the run is still going is NOT a failure —
+          // report running so HTTP callers keep polling instead of surfacing an
+          // error to the user.
+          if (outcome.status === "failed" && outcome.error === "workflow wait timed out") {
+            const now = yield* runtime.status({ runID: params.runID })
+            if (now.status === "running") return { status: "running" as const }
+          }
+          return outcome
         }),
     )
     .post(
