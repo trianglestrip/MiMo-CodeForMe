@@ -50,7 +50,6 @@ const migrations = await Promise.all(
 console.log(`Loaded ${migrations.length} migrations`)
 
 const singleFlag = process.argv.includes("--single")
-const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const plugin = createSolidTransformPlugin()
 // const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
@@ -86,7 +85,6 @@ const allTargets: {
   os: string
   arch: "arm64" | "x64"
   abi?: "musl"
-  avx2?: false
 }[] = [
   {
     os: "linux",
@@ -98,11 +96,6 @@ const allTargets: {
   },
   {
     os: "linux",
-    arch: "x64",
-    avx2: false,
-  },
-  {
-    os: "linux",
     arch: "arm64",
     abi: "musl",
   },
@@ -110,12 +103,6 @@ const allTargets: {
     os: "linux",
     arch: "x64",
     abi: "musl",
-  },
-  {
-    os: "linux",
-    arch: "x64",
-    abi: "musl",
-    avx2: false,
   },
   {
     os: "darwin",
@@ -126,22 +113,12 @@ const allTargets: {
     arch: "x64",
   },
   {
-    os: "darwin",
-    arch: "x64",
-    avx2: false,
-  },
-  {
     os: "win32",
     arch: "arm64",
   },
   {
     os: "win32",
     arch: "x64",
-  },
-  {
-    os: "win32",
-    arch: "x64",
-    avx2: false,
   },
 ]
 
@@ -149,12 +126,6 @@ const targets = singleFlag
   ? allTargets.filter((item) => {
       if (item.os !== process.platform || item.arch !== process.arch) {
         return false
-      }
-
-      // When building for the current platform, prefer a single native binary by default.
-      // Baseline binaries require additional Bun artifacts and can be flaky to download.
-      if (item.avx2 === false) {
-        return baselineFlag
       }
 
       // also skip abi-specific builds for the same reason
@@ -213,7 +184,6 @@ for (const item of targets) {
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
-    item.avx2 === false ? "baseline" : undefined,
     item.abi === undefined ? undefined : item.abi,
   ]
     .filter(Boolean)
@@ -261,10 +231,7 @@ for (const item of targets) {
       },
     })
   } catch (e) {
-    if (name.includes("baseline")) {
-      console.error(`baseline build skipped (download flaky): ${e}`)
-      continue
-    }
+    console.error(`build failed for ${name}:`, e)
     throw e
   }
 
