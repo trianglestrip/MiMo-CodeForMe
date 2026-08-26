@@ -48,7 +48,25 @@ export const QuestionTool = Tool.define<typeof parameters, Metadata, Question.Se
             sessionID: ctx.sessionID,
             questions: params.questions,
             tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
-          })
+          }).pipe(
+            // 用户拒绝/关闭弹窗不是缺陷：把决定权还给模型（同 never-ask 范式），
+            // 整轮继续；只有真正的意外失败才经下方 orDie 终止
+            Effect.catchTag("QuestionRejectedError", () => Effect.succeed(null)),
+          )
+
+          if (answers === null) {
+            return {
+              title: `Dismissed ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
+              output:
+                "[Skipped] The user dismissed this question without answering. " +
+                "Continue autonomously: re-evaluate the options you proposed, pick the most suitable one for the current context, " +
+                "and explicitly state which option you chose and why in your response text " +
+                "(not just in thinking), so the user can review the decision later.",
+              metadata: {
+                answers: params.questions.map(() => []),
+              },
+            }
+          }
 
           const formatted = params.questions
             .map((q, i) => `"${q.question}"="${answers[i]?.length ? answers[i].join(", ") : "Unanswered"}"`)
