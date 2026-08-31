@@ -16,6 +16,7 @@ Invoked from the shell. `mimo` with no command opens the TUI.
 | `mimo upgrade` | Update to the latest version |
 | `mimo uninstall` | Uninstall MiMoCode |
 | `mimo serve` | Run the server |
+| `mimo llm-server issue`/`list`/`revoke` | Mint and manage tokens that let a task reach this instance's models over `/v1`; it starts nothing — see @capability-api.md |
 | `mimo stats` | Usage statistics |
 | `mimo export` / `mimo import` | Export / import sessions |
 | `mimo session` | Manage sessions |
@@ -29,7 +30,9 @@ Invoked from the shell. `mimo` with no command opens the TUI.
 
 Run `mimo <command> --help` for flags on any command.
 
-Notable TUI flags: `--continue`/`-c` (resume last session), `--session`/`-s`, `--model`/`-m`, `--agent`, `--never-ask`, `--trust`, and `--dangerously-skip-permissions` (auto-approve everything not explicitly denied; prompts once for confirmation — see permissions.md).
+Notable TUI flags: `--continue`/`-c` (resume last session), `--session`/`-s`, `--model`/`-m`, `--agent`, `--never-ask`, `--trust`, and `--dangerously-skip-permissions`/`--yolo` (auto-approve everything not explicitly denied; prompts once for confirmation — see permissions.md).
+
+For terminal compatibility, TUI rendering or lag, and local rendering over SSH with `mimo serve` + `mimo attach`, see @guide.md.
 
 ## Slash commands (inside the TUI)
 
