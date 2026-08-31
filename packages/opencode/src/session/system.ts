@@ -6,17 +6,15 @@ import { Git } from "@/git"
 import { Shell } from "@/shell/shell"
 import { which } from "@/util/which"
 
-import PROMPT_ANTHROPIC from "./prompt/default.txt"
+import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
 import PROMPT_DEFAULT from "./prompt/default.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 import PROMPT_GPT from "./prompt/gpt.txt"
 import PROMPT_KIMI from "./prompt/kimi.txt"
-import PROMPT_GPT_SUBAGENT_TOOLS from "../agent/prompt/gpt-tools.txt"
 
-import PROMPT_CODEX from "./prompt/default.txt"
-import PROMPT_DEEPSEEK from "./prompt/default.txt"
-import PROMPT_GLM from "./prompt/default.txt"
+import PROMPT_DEEPSEEK from "./prompt/deepseek.txt"
+import PROMPT_GLM from "./prompt/glm.txt"
 import PROMPT_MINIMAX from "./prompt/minimax.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
 import { Provider } from "@/provider"
@@ -24,8 +22,8 @@ import { sortVisionModels } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
 import { Skill } from "@/skill"
-import { isSkillSearchDisabled, type SkillSearchModel } from "@/skill/search"
-import { usesGPTToolset } from "@/tool/gpt"
+import { Flag } from "@/flag/flag"
+import { type HarnessMode, isGPTModel } from "@/tool/gpt"
 
 function renderGitResult(result: Git.Result, fallback = "(none)") {
   if (result.exitCode !== 0) return fallback
@@ -34,10 +32,11 @@ function renderGitResult(result: Git.Result, fallback = "(none)") {
 
 const anthropicEnvironment = new Map<string, string>()
 
-export function provider(model: Provider.Model) {
+export function provider(model: Provider.Model, harness?: HarnessMode) {
+  if (harness === "codex" || ((harness === undefined || harness === "auto") && Flag.MIMOCODE_CODEX_MODE)) return [PROMPT_GPT]
   const prompt = (id: string) => {
+    if (isGPTModel(id)) return PROMPT_GPT
     if (id.includes("gpt-4") || id.includes("o1") || id.includes("o3")) return PROMPT_BEAST
-    if (id.includes("gpt")) return id.includes("codex") ? PROMPT_CODEX : PROMPT_GPT
     if (id.includes("gemini-")) return PROMPT_GEMINI
     if (id.includes("claude")) return PROMPT_ANTHROPIC
     if (id.toLowerCase().includes("trinity")) return PROMPT_TRINITY
@@ -49,20 +48,13 @@ export function provider(model: Provider.Model) {
   return [prompt(model.id) ?? prompt(model.api.id) ?? PROMPT_DEFAULT]
 }
 
-export function agent(agent: Agent.Info, model: Provider.Model) {
-  const base = agent.prompt ? [agent.prompt] : provider(model)
-  if (agent.mode !== "subagent" || agent.toolAllowlist?.length === 0 || !usesGPTToolset(model.id)) return base
-  if (!agent.prompt && base.includes(PROMPT_GPT)) return base
-  return [...base, PROMPT_GPT_SUBAGENT_TOOLS]
+export function agent(agent: Agent.Info, model: Provider.Model, harness?: HarnessMode) {
+  return agent.prompt ? [agent.prompt] : provider(model, harness)
 }
 
 export interface Interface {
-  readonly environment: (model: Provider.Model, now: number) => Effect.Effect<string[]>
-  readonly skills: (
-    agent: Agent.Info,
-    model?: SkillSearchModel,
-    opts?: { namesOnly?: boolean },
-  ) => Effect.Effect<string | undefined>
+  readonly environment: (model: Provider.Model, now: number, harness?: HarnessMode) => Effect.Effect<string[]>
+  readonly skills: (agent: Agent.Info) => Effect.Effect<string | undefined>
   readonly available: (agent?: Agent.Info) => Effect.Effect<Skill.Info[]>
   readonly all: () => Effect.Effect<Skill.Info[]>
 }
@@ -77,9 +69,14 @@ export const layer = Layer.effect(
     const git = yield* Git.Service
 
     return Service.of({
-      environment: Effect.fn("SystemPrompt.environment")(function* (model: Provider.Model, now: number) {
+      environment: Effect.fn("SystemPrompt.environment")(function* (
+        model: Provider.Model,
+        now: number,
+        harness?: HarnessMode,
+      ) {
+        if (!Flag.MIMOCODE_ENABLE_DYNAMIC_SYSTEM_PROMPT) return []
         const project = Instance.project
-        if (provider(model)[0] === PROMPT_ANTHROPIC) {
+        if (provider(model, harness)[0] === PROMPT_ANTHROPIC) {
           const key = `${Instance.directory}\0${now}\0${model.providerID}\0${model.api.id}`
           const cached = anthropicEnvironment.get(key)
           if (cached)
@@ -133,13 +130,9 @@ export const layer = Layer.effect(
             `  Workspace root folder: ${Instance.worktree}`,
             `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
-            // Anchored to the session's creation time (not request time) so this block
-            // stays byte-identical across every turn of a session — including ones that
-            // cross midnight — keeping it inside the Anthropic cached system prefix.
-            `  Today's date: ${new Date(now).toDateString()}`,
             `</env>`,
           ].join("\n"),
-          `IMPORTANT: Your response must ALWAYS strictly follow the same major language as the user.`
+          `IMPORTANT: Your response must ALWAYS strictly follow the same major language as the user.`,
         ]
         const maskVisionCapability = [model.id, model.api.id, model.providerID].some((id) =>
           /(^|[^a-z0-9])(gpt|claude|gemini)($|[^a-z0-9])/i.test(id),
@@ -179,46 +172,13 @@ export const layer = Layer.effect(
         return base
       }),
 
-      skills: Effect.fn("SystemPrompt.skills")(function* (
-        agent: Agent.Info,
-        model?: SkillSearchModel,
-        opts?: { namesOnly?: boolean },
-      ) {
+      skills: Effect.fn("SystemPrompt.skills")(function* (agent: Agent.Info) {
         if (Permission.disabled(["skill"], agent.permission).has("skill")) return
 
         const list = yield* skill.modelInvocable(agent)
 
-        // Compact catalog for in-message reminders: the full name+description
-        // list already lives in the skill tool description, so the reminder
-        // only needs the names to avoid duplicating ~18KB per request.
-        if (opts?.namesOnly === true) {
-          return [
-            "Skills provide specialized instructions and workflows for specific tasks.",
-            "Use the skill tool to load a skill when a task matches its description.",
-            "Skill names available in this session: " +
-              list
-                .map((s) => s.name)
-                .sort()
-                .join(", "),
-          ].join("\n")
-        }
-
-        if (model && isSkillSearchDisabled(model)) {
-          return [
-            "Skills provide specialized instructions and workflows for specific tasks.",
-            "Use the skill tool to load a skill when a task matches its description.",
-            Skill.fmt(list, { verbose: true }),
-          ].join("\n")
-        }
-
         return [
-          "Skills provide specialized instructions and workflows for specific tasks.",
-          "On the first user query in a session, when the task might benefit from a specialized workflow, call skill_search to find the best matching non-Compose skill.",
-          "Rewrite the user's request into a concise Skill Query with these dimensions when available: action, input, output, audience.",
-          "Preserve an explicitly mentioned skill ID, name, or alias verbatim in the Skill Query so exact matching can take priority over BM25.",
-          "If skill_search returns a loaded_skill_id, follow the loaded instructions. If it returns uncertain candidates, choose the best fit or continue without a skill. If it returns no_match, continue normally.",
-          "Compose skills are not searchable; load an explicitly requested Compose skill directly with the skill tool.",
-          "Use the skill tool to load a skill when a task matches its description.",
+          "Skills available in this session:",
           // the agents seem to ingest the information about skills a bit better if we present a more verbose
           // version of them here and a less verbose version in tool description, rather than vice versa.
           Skill.fmt(list, { verbose: true }),

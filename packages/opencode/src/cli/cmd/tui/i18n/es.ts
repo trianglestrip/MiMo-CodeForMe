@@ -67,6 +67,8 @@ export const dict = {
     "¿Buscas un atajo? Pregunta {highlight}¿Qué comandos slash puedo usar?{/highlight} directamente en el chat",
   "tui.tips.background":
     "Ejecuta {highlight}/background{/highlight} para usar una imagen personalizada como fondo de inicio",
+  "tui.tips.vivid":
+    "Ejecuta {highlight}/vivid{/highlight} para alternar entre las vistas enriquecida y mínima según sea necesario",
   "tui.tips.compose_next":
     "Prueba {highlight}/compose-next{/highlight} en vez del agente Compose para modelos avanzados",
   "tui.tips.undo":
@@ -289,7 +291,6 @@ export const dict = {
   "tui.skill.html-to-video-pipeline.description": "El arma definitiva para vídeos cortos — crea vídeos cortos con HTML",
   "tui.skill.arxiv.description": "Busca, cita, descarga y sigue artículos de arXiv",
   "tui.skill.skill-creator.description": "Crea, revisa y mejora skills de agente",
-  "tui.skill.drive-mimo.description": "Controla programáticamente otro proceso MiMoCode — eventos JSON headless o TUI interactiva vía tmux",
   "tui.skill.research-paper-writing.description": "Redacta, pule y critica artículos académicos con perspectiva de revisor",
   "tui.skill.playwright.description": "Automatiza flujos de navegador reales desde la terminal",
   "tui.skill.codex.description": "Ejecuta Codex CLI de forma autónoma en scripts, CI, Docker y Kubernetes",
@@ -335,6 +336,8 @@ export const dict = {
   // App-level commands
   "tui.command.session.list.title": "Cambiar sesión",
   "tui.command.session.new.title": "Nueva sesión",
+  "tui.command.session.recover.title": "Continuar turno interrumpido",
+  "tui.session.recovering": "recuperando",
   "tui.command.workflow.list.title": "Flujos de trabajo",
   "tui.command.model.list.title": "Cambiar modelo",
   "tui.command.model.cycle_recent.title": "Ciclo de modelos",
@@ -357,8 +360,16 @@ export const dict = {
   "tui.command.skip_permissions.title_on": "Omitir permisos: ACTIVADO (auto-aprobar solicitudes) — clic para desactivar",
   "tui.command.skip_permissions.title_off": "Omitir permisos: DESACTIVADO — clic para activar (auto-aprobar solicitudes)",
   "tui.command.skip_permissions.toast_on":
-    "Omitir permisos ACTIVADO — solicitudes auto-aprobadas (subagentes incluidos). Los comandos destructivos aún preguntan, pero se auto-rechazan tras 60s sin respuesta.",
+    "Omitir permisos ACTIVADO — solicitudes auto-aprobadas (subagentes incluidos). Los comandos destructivos aún solicitan confirmación.",
   "tui.command.skip_permissions.toast_off": "Omitir permisos DESACTIVADO — las solicitudes vuelven a requerir tu aprobación.",
+  "tui.command.permission_timeout.title": "Tiempo de espera de permisos",
+  "tui.permission_timeout.title": "Tiempo de espera de permisos",
+  "tui.permission_timeout.hint": "Cuánto esperar la aprobación humana antes del rechazo automático.",
+  "tui.permission_timeout.option.never": "Nunca",
+  "tui.permission_timeout.option.never_description": "Esperar indefinidamente la aprobación humana",
+  "tui.permission_timeout.option.tier_description": "Rechazo automático después de {{duration}}",
+  "tui.permission_timeout.toast_never": "Tiempo de espera desactivado — las solicitudes esperan indefinidamente.",
+  "tui.permission_timeout.toast_set": "Tiempo de espera establecido en {{duration}}.",
   "tui.command.agent.cycle.title": "Ciclo de agentes",
   "tui.command.variant.cycle.title": "Ciclo de variantes",
   "tui.command.variant.list.title": "Cambiar variante de modelo",
@@ -432,6 +443,10 @@ export const dict = {
   "tui.toast.try_best.paused_other": "Se detectó un bucle try-best; la sesión {{session}} se ha pausado.",
   "tui.toast.try_best.handoff_failed": "No se pudo iniciar la transferencia al entorno seleccionado.",
   "tui.toast.try_best.continue_failed": "No se pudo continuar la sesión",
+  "tui.toast.session.recover.started": "Continuando el turno interrumpido",
+  "tui.toast.session.recover.none": "No hay ningún turno interrumpido que continuar",
+  "tui.toast.session.recover.failed": "No se pudo continuar el turno interrumpido",
+  "tui.toast.session.recover.busy": "La sesión sigue ejecutándose; inténtalo cuando esté inactiva",
   "tui.dialog.try_best.title": "Bucle try-best detectado — turno pausado",
   "tui.dialog.try_best.reason.edit_repeat": "Se repitieron ediciones casi idénticas {{count}} veces.",
   "tui.dialog.try_best.reason.edit_repeat_path":

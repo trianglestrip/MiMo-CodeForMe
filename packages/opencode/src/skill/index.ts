@@ -2,7 +2,7 @@ import os from "os"
 import path from "path"
 import { pathToFileURL } from "url"
 import z from "zod"
-import { Effect, Layer, Context } from "effect"
+import { Duration, Effect, Layer, Context } from "effect"
 import { NamedError } from "@mimo-ai/shared/util/error"
 import type { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
@@ -167,26 +167,15 @@ const scan = Effect.fnUntraced(function* (
     }),
   )
 
-  for (const match of matches) {
+  for (const match of matches.toSorted()) {
     state.matches.add(match)
     state.dirs.add(path.dirname(match))
   }
 })
 
-// Directory-independent skill discovery: builtin + compose bundles and the home
-// external dirs. These inputs are process-constant (version-keyed bundles whose
-// extraction is marker-guarded, immutable feature flags, a fixed home dir), so
-// the result is computed once per process and shared across every directory.
-// This is the dominant redundant cost when the frontend disposes all instances
-// and then re-queries /agent for several directories in a burst: without this
-// cache each directory bootstrap re-scans the ~38 builtin skills and re-runs the
-// bundle extraction checks. The cache intentionally survives Instance.disposeAll
-// (it is not tied to a per-directory lifecycle); only a process restart, which
-// re-reads the bundles, clears it.
-let globalDiscoveryCache: DiscoveryState | undefined
-
-const discoverGlobalSkills = Effect.fnUntraced(function* (fsys: AppFileSystem.Interface) {
-  if (globalDiscoveryCache) return globalDiscoveryCache
+const discoverStableSkills = Effect.fnUntraced(function* (
+  fsys: AppFileSystem.Interface,
+) {
   const state: ScanState = { matches: new Set(), dirs: new Set() }
   const bundledRoots: string[] = []
 
@@ -227,6 +216,7 @@ const discoverGlobalSkills = Effect.fnUntraced(function* (fsys: AppFileSystem.In
   if (!Flag.MIMOCODE_DISABLE_EXTERNAL_SKILLS) {
     const externalDirs = EXTERNAL_DIRS.filter((dir) => {
       if (dir === ".claude" && Flag.MIMOCODE_DISABLE_CLAUDE_CODE_SKILLS) return false
+      if (dir === ".agents" && Flag.MIMOCODE_DISABLE_AGENTS_SKILLS) return false
       if (dir === ".codex" && Flag.MIMOCODE_DISABLE_CODEX_SKILLS) return false
       if (dir === ".opencode" && Flag.MIMOCODE_DISABLE_OPENCODE_SKILLS) return false
       return true
@@ -239,31 +229,28 @@ const discoverGlobalSkills = Effect.fnUntraced(function* (fsys: AppFileSystem.In
     }
   }
 
-  globalDiscoveryCache = {
+  return {
     matches: Array.from(state.matches),
     dirs: Array.from(state.dirs),
     bundledRoots,
   }
-  return globalDiscoveryCache
 })
 
 const discoverSkills = Effect.fnUntraced(function* (
   config: Config.Interface,
   discovery: Discovery.Interface,
   fsys: AppFileSystem.Interface,
+  stable: DiscoveryState,
   directory: string,
   worktree: string,
 ) {
-  const cached = yield* discoverGlobalSkills(fsys)
-  const state: ScanState = {
-    matches: new Set(cached.matches),
-    dirs: new Set(cached.dirs),
-  }
-  const bundledRoots = [...cached.bundledRoots]
+  const state: ScanState = { matches: new Set(stable.matches), dirs: new Set(stable.dirs) }
+  const bundledRoots = [...stable.bundledRoots]
 
   if (!Flag.MIMOCODE_DISABLE_EXTERNAL_SKILLS) {
     const externalDirs = EXTERNAL_DIRS.filter((dir) => {
       if (dir === ".claude" && Flag.MIMOCODE_DISABLE_CLAUDE_CODE_SKILLS) return false
+      if (dir === ".agents" && Flag.MIMOCODE_DISABLE_AGENTS_SKILLS) return false
       if (dir === ".codex" && Flag.MIMOCODE_DISABLE_CODEX_SKILLS) return false
       if (dir === ".opencode" && Flag.MIMOCODE_DISABLE_OPENCODE_SKILLS) return false
       return true
@@ -311,7 +298,7 @@ const discoverSkills = Effect.fnUntraced(function* (
 
 const loadSkills = Effect.fnUntraced(function* (state: State, discovered: DiscoveryState, bus: Bus.Interface) {
   yield* Effect.forEach(discovered.matches, (match) => add(state, match, discovered.bundledRoots, bus), {
-    concurrency: "unbounded",
+    concurrency: 1,
     discard: true,
   })
 
@@ -327,70 +314,41 @@ export const layer = Layer.effect(
     const config = yield* Config.Service
     const bus = yield* Bus.Service
     const fsys = yield* AppFileSystem.Service
-    const computeState = () =>
-      Effect.gen(function* () {
-        const ctx = yield* InstanceState.context
-        const disc = yield* discoverSkills(config, discovery, fsys, ctx.directory, ctx.worktree)
+    const [stable, invalidateStable] = yield* Effect.cachedInvalidateWithTTL(
+      discoverStableSkills(fsys),
+      Duration.infinity,
+    )
+    const discovered = yield* InstanceState.make(
+      Effect.fn("Skill.discovery")(function* (ctx) {
+        return yield* discoverSkills(config, discovery, fsys, yield* stable, ctx.directory, ctx.worktree)
+      }),
+    )
+    const state = yield* InstanceState.make(
+      Effect.fn("Skill.state")(function* (ctx) {
         const s: State = { skills: {}, dirs: new Set() }
-        yield* loadSkills(s, disc, bus)
+        yield* loadSkills(s, yield* InstanceState.get(discovered), bus)
         return s
-      })
-
-    // Cached variant: a single prompt loop calls Skill.available/modelInvocable
-    // repeatedly (resolveTools, fork agents, checkpoint-writer, …), and each call
-    // previously re-discovered and re-loaded every skill file. Skills are
-    // effectively static within a session, so memoize per (directory, worktree)
-    // with a TTL. The TTL bounds staleness: newly added skills become visible at
-    // the next refresh, while a single turn reuses the snapshot.
-    //
-    // TTL sizing (learned the hard way): a full computeState() scan + SKILL.md
-    // parse takes ~15s on Windows (thousands of bundled skill files, AV
-    // real-time scanning), and consecutive prompt-loop steps are separated by
-    // LLM calls of 5–20s+. A 10s TTL therefore expired before every reuse —
-    // the cache never hit and every step re-scanned (log: repeated
-    // "init count=N"). 60s keeps every step of a turn on the same snapshot
-    // while still picking up newly added skills within a minute.
-    const stateCache = new Map<string, { state: State; at: number }>()
-    const STATE_CACHE_TTL_MS = 60_000
-    const cachedComputeState = () =>
-      Effect.gen(function* () {
-        const ctx = yield* InstanceState.context
-        const key = `${ctx.directory}|${ctx.worktree}`
-        const hit = stateCache.get(key)
-        const now = Date.now()
-        if (hit && now - hit.at < STATE_CACHE_TTL_MS) return hit.state
-        const s = yield* computeState()
-        stateCache.set(key, { state: s, at: now })
-        // Bounded memory: many directories over a long-lived server.
-        if (stateCache.size > 64) stateCache.clear()
-        return s
-      })
-
-    const computeDiscovered = () =>
-      Effect.gen(function* () {
-        const ctx = yield* InstanceState.context
-        return yield* discoverSkills(config, discovery, fsys, ctx.directory, ctx.worktree)
-      })
+      }),
+    )
 
     const get = Effect.fn("Skill.get")(function* (name: string) {
-      const s = yield* cachedComputeState()
+      const s = yield* InstanceState.get(state)
       return s.skills[name]
     })
 
     const all = Effect.fn("Skill.all")(function* () {
-      const s = yield* cachedComputeState()
+      const s = yield* InstanceState.get(state)
       return Object.values(s.skills)
     })
 
     const dirs = Effect.fn("Skill.dirs")(function* () {
-      const disc = yield* computeDiscovered()
-      return disc.dirs
+      return (yield* InstanceState.get(discovered)).dirs
     })
 
     // Authorization only: `deny` means unusable by anyone, so this is also the
     // set a user slash invocation resolves against.
     const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-      const s = yield* cachedComputeState()
+      const s = yield* InstanceState.get(state)
       let list: Info[] = Object.values(s.skills)
 
       list = list.toSorted((a, b) => a.name.localeCompare(b.name))
@@ -403,8 +361,11 @@ export const layer = Layer.effect(
     const modelInvocable = Effect.fn("Skill.modelInvocable")(function* (agent?: Agent.Info) {
       return (yield* available(agent)).filter((skill) => !skill.disable_model_invocation)
     })
+
     const reload = Effect.fn("Skill.reload")(function* () {
-      // No-op: state is always computed fresh on each access; kept for interface compatibility
+      yield* invalidateStable
+      yield* InstanceState.invalidate(discovered)
+      yield* InstanceState.invalidate(state)
     })
 
     return Service.of({ get, all, dirs, available, modelInvocable, reload })
@@ -424,7 +385,7 @@ export function fmt(list: Info[], opts: { verbose: boolean }) {
     return [
       "<available_skills>",
       ...list
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .toSorted((a, b) => a.name.localeCompare(b.name))
         .flatMap((skill) => [
           "  <skill>",
           `    <name>${skill.name}</name>`,

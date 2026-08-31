@@ -67,6 +67,8 @@ export const dict = {
     "Vous cherchez un raccourci ? Demandez {highlight}Quelles commandes slash puis-je utiliser ?{/highlight} directement dans le chat",
   "tui.tips.background":
     "Exécutez {highlight}/background{/highlight} pour définir une image personnalisée comme fond d'écran d'accueil",
+  "tui.tips.vivid":
+    "Exécutez {highlight}/vivid{/highlight} pour basculer entre les affichages enrichi et minimal selon vos besoins",
   "tui.tips.compose_next":
     "Essayez {highlight}/compose-next{/highlight} au lieu de l'agent Compose pour les modèles avancés",
   "tui.tips.undo": "Utilisez {highlight}/undo{/highlight} pour annuler le dernier message et ses modifications",
@@ -277,7 +279,6 @@ export const dict = {
   "tui.skill.html-to-video-pipeline.description": "L'arme ultime pour vidéos courtes — créez des vidéos courtes avec du HTML",
   "tui.skill.arxiv.description": "Rechercher, citer, télécharger et suivre des articles arXiv",
   "tui.skill.skill-creator.description": "Créer, réviser et améliorer des skills d'agent",
-  "tui.skill.drive-mimo.description": "Piloter un autre processus MiMoCode — événements JSON headless ou TUI interactive via tmux",
   "tui.skill.research-paper-writing.description": "Rédiger, polir et critiquer des articles académiques avec l'œil d'un relecteur",
   "tui.skill.playwright.description": "Automatiser de vrais parcours navigateur depuis le terminal",
   "tui.skill.codex.description": "Exécuter Codex CLI de façon autonome dans les scripts, la CI, Docker et Kubernetes",
@@ -323,6 +324,8 @@ export const dict = {
   // App-level commands
   "tui.command.session.list.title": "Changer de session",
   "tui.command.session.new.title": "Nouvelle session",
+  "tui.command.session.recover.title": "Reprendre le tour interrompu",
+  "tui.session.recovering": "récupération en cours",
   "tui.command.workflow.list.title": "Workflows",
   "tui.command.model.list.title": "Changer de modèle",
   "tui.command.model.cycle_recent.title": "Modèles récents",
@@ -345,8 +348,16 @@ export const dict = {
   "tui.command.skip_permissions.title_on": "Ignorer les autorisations : ACTIVÉ (auto-approuver les demandes) — cliquer pour désactiver",
   "tui.command.skip_permissions.title_off": "Ignorer les autorisations : DÉSACTIVÉ — cliquer pour activer (auto-approuver les demandes)",
   "tui.command.skip_permissions.toast_on":
-    "Ignorer les autorisations ACTIVÉ — demandes auto-approuvées (sous-agents inclus). Les commandes destructrices demandent encore, mais sont auto-rejetées après 60s sans réponse.",
+    "Ignorer les autorisations ACTIVÉ — demandes auto-approuvées (sous-agents inclus). Les commandes destructrices demandent encore confirmation.",
   "tui.command.skip_permissions.toast_off": "Ignorer les autorisations DÉSACTIVÉ — les demandes nécessitent à nouveau ton approbation.",
+  "tui.command.permission_timeout.title": "Délai d'attente des autorisations",
+  "tui.permission_timeout.title": "Délai d'attente des autorisations",
+  "tui.permission_timeout.hint": "Combien de temps attendre l'approbation humaine avant rejet automatique.",
+  "tui.permission_timeout.option.never": "Jamais",
+  "tui.permission_timeout.option.never_description": "Attendre indéfiniment l'approbation humaine",
+  "tui.permission_timeout.option.tier_description": "Rejet automatique après {{duration}}",
+  "tui.permission_timeout.toast_never": "Délai d'attente désactivé — les demandes attendent indéfiniment.",
+  "tui.permission_timeout.toast_set": "Délai d'attente défini sur {{duration}}.",
   "tui.command.agent.cycle.title": "Cycle d'agents",
   "tui.command.variant.cycle.title": "Cycle de variantes",
   "tui.command.variant.list.title": "Changer de variante de modèle",
@@ -421,6 +432,10 @@ export const dict = {
   "tui.toast.try_best.paused_other": "Boucle try-best détectée ; la session {{session}} a été suspendue.",
   "tui.toast.try_best.handoff_failed": "Impossible de démarrer le transfert vers le harnais sélectionné.",
   "tui.toast.try_best.continue_failed": "Impossible de poursuivre la session",
+  "tui.toast.session.recover.started": "Reprise du tour interrompu",
+  "tui.toast.session.recover.none": "Aucun tour interrompu à reprendre",
+  "tui.toast.session.recover.failed": "Impossible de reprendre le tour interrompu",
+  "tui.toast.session.recover.busy": "La session est encore active ; réessayez lorsqu'elle sera inactive",
   "tui.dialog.try_best.title": "Boucle try-best détectée — tour suspendu",
   "tui.dialog.try_best.reason.edit_repeat": "Des modifications presque identiques ont été répétées {{count}} fois.",
   "tui.dialog.try_best.reason.edit_repeat_path":

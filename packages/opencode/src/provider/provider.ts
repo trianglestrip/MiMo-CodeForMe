@@ -9,7 +9,7 @@ import { Npm } from "../npm"
 import { Hash } from "@mimo-ai/shared/util/hash"
 import { Plugin } from "../plugin"
 import { NamedError } from "@mimo-ai/shared/util/error"
-import { type LanguageModelV3 } from "@ai-sdk/provider"
+import { type LanguageModelV3, type SpeechModelV3 } from "@ai-sdk/provider"
 import * as ModelsDev from "./models"
 import { Auth } from "../auth"
 import { Env } from "../env"
@@ -27,6 +27,7 @@ import { AppFileSystem } from "@mimo-ai/shared/filesystem"
 import { isRecord } from "@/util/record"
 import { withStatics } from "@/util/schema"
 import { isFreeApiModel, isFreeApiSunset } from "@/util/free-api-sunset"
+import { usesMimoResponsesApi } from "../tool/gpt"
 
 import * as ProviderTransform from "./transform"
 import { ModelID, ProviderID } from "./schema"
@@ -323,6 +324,14 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           return sdk.responses(modelID)
         },
         options: { headerTimeout: DEFAULT_OPENAI_HEADER_TIMEOUT },
+      }),
+    xiaomi: () =>
+      Effect.succeed({
+        autoload: false,
+        async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
+          return usesMimoResponsesApi(modelID) ? sdk.responses(modelID) : sdk.languageModel(modelID)
+        },
+        options: {},
       }),
     xai: () =>
       Effect.succeed({
@@ -999,6 +1008,17 @@ const ProviderCapabilities = Schema.Struct({
   reasoning: Schema.Boolean,
   attachment: Schema.Boolean,
   toolcall: Schema.Boolean,
+  /**
+   * Builds a voice from a text description. Declared in config, never derived.
+   *
+   * Optional rather than a defaulted boolean, and the reason is worth keeping: absence
+   * genuinely means "not declared", which is the same thing as false here. Making it
+   * required would force every hand-built model fixture in the suite to state a capability
+   * it has no opinion about, adding noise to unrelated diffs for no semantic gain.
+   */
+  voiceDesign: Schema.optional(Schema.Boolean),
+  /** Reproduces a voice from a reference sample. Same provenance as `voiceDesign`. */
+  voiceClone: Schema.optional(Schema.Boolean),
   input: ProviderModalities,
   output: ProviderModalities,
   interleaved: ProviderInterleaved,
@@ -1092,18 +1112,20 @@ export interface Interface {
   readonly getProvider: (providerID: ProviderID) => Effect.Effect<Info>
   readonly getModel: (providerID: ProviderID, modelID: ModelID) => Effect.Effect<Model>
   readonly getLanguage: (model: Model) => Effect.Effect<LanguageModelV3>
+  readonly getSpeech: (model: Model) => Effect.Effect<SpeechModelV3>
   readonly closest: (
     providerID: ProviderID,
     query: string[],
   ) => Effect.Effect<{ providerID: ProviderID; modelID: string } | undefined>
   readonly getSmallModel: (providerID: ProviderID) => Effect.Effect<Model | undefined>
-  readonly getVisionModel: () => Effect.Effect<Model | undefined>
+  readonly getVisionModel: (providerID?: ProviderID) => Effect.Effect<Model | undefined>
   readonly resolveModelRef: (ref: string, contextProviderID?: ProviderID) => Effect.Effect<Model>
   readonly defaultModel: () => Effect.Effect<{ providerID: ProviderID; modelID: ModelID }>
 }
 
 interface State {
   models: Map<string, LanguageModelV3>
+  speech: Map<string, SpeechModelV3>
   providers: Record<ProviderID, Info>
   sdk: Map<string, BundledSDK>
   modelLoaders: Record<string, CustomModelLoader>
@@ -1168,6 +1190,8 @@ function fromModelsDevModel(provider: ModelsDev.Provider, model: ModelsDev.Model
       reasoning: model.reasoning ?? false,
       attachment: model.attachment ?? false,
       toolcall: model.tool_call ?? true,
+      voiceDesign: model.voice_design ?? false,
+      voiceClone: model.voice_clone ?? false,
       input: {
         text: model.modalities?.input?.includes("text") ?? false,
         audio: model.modalities?.input?.includes("audio") ?? false,
@@ -1251,6 +1275,7 @@ const layer: Layer.Layer<
 
         const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>
         const languages = new Map<string, LanguageModelV3>()
+        const speeches = new Map<string, SpeechModelV3>()
         const modelLoaders: {
           [providerID: string]: CustomModelLoader
         } = {}
@@ -1354,6 +1379,12 @@ const layer: Layer.Layer<
                     model.modalities?.output?.includes("video") ?? existingModel?.capabilities.output.video ?? false,
                   pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities.output.pdf ?? false,
                 },
+                // Declared per model, never derived: design is indistinguishable from plain
+                // TTS by modality, and a sample-taking model could be speech-to-speech
+                // conversion. `existingModel` carries the value forward when a config entry
+                // only overrides other fields.
+                voiceDesign: model.voice_design ?? existingModel?.capabilities.voiceDesign,
+                voiceClone: model.voice_clone ?? existingModel?.capabilities.voiceClone,
                 interleaved:
                   model.interleaved ??
                   existingModel?.capabilities.interleaved ??
@@ -1387,7 +1418,16 @@ const layer: Layer.Layer<
                   return DEFAULT_CONTEXT_WINDOW
                 })(),
                 input: model.limit?.input ?? existingModel?.limit?.input,
-                output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
+                output:
+                  model.limit?.output ??
+                  existingModel?.limit?.output ??
+                  (ProviderTransform.usesLargeModelDefaults({
+                    id: modelID,
+                    providerID,
+                    api: { id: apiID },
+                  })
+                    ? ProviderTransform.LARGE_MODEL_OUTPUT_TOKEN_MAX
+                    : 0),
               },
               headers: mergeDeep(existingModel?.headers ?? {}, model.headers ?? {}),
               family: model.family ?? existingModel?.family ?? "",
@@ -1580,6 +1620,7 @@ const layer: Layer.Layer<
 
         return {
           models: languages,
+          speech: speeches,
           providers,
           sdk,
           modelLoaders,
@@ -1698,7 +1739,14 @@ const layer: Layer.Layer<
           return wrapSSE(bounded, chunkTimeout, chunkAbortCtl)
         }
 
-        const bundledLoader = BUNDLED_PROVIDERS[model.api.npm]
+        const bundledLoader =
+          model.providerID === "xiaomi" && model.api.npm === "@ai-sdk/openai-compatible"
+            ? () =>
+                import("./sdk/copilot").then(
+                  (module) => (options: any) =>
+                    module.createOpenaiCompatible({ ...options, customToolNames: ["exec"] }),
+                )
+            : BUNDLED_PROVIDERS[model.api.npm]
         if (bundledLoader) {
           log.info("using bundled provider", {
             providerID: model.providerID,
@@ -1798,6 +1846,64 @@ const layer: Layer.Layer<
       })
     })
 
+    /**
+     * Find a provider SDK's speech-model factory.
+     *
+     * Two names exist for the same thing and neither is guaranteed: the standard
+     * provider interface calls it `speechModel`, `@ai-sdk/openai` calls it
+     * `speech`, and `ai`'s own `Provider` type declares neither — so the member
+     * has to be probed at runtime rather than read off the type. The
+     * `typeof === "function"` check is what makes the narrowing honest.
+     */
+    function speechFactory(sdk: object) {
+      const candidate: { speechModel?: unknown; speech?: unknown } = sdk
+      const factory = candidate.speechModel ?? candidate.speech
+      if (typeof factory !== "function") return undefined
+      return factory as (modelId: string) => SpeechModelV3
+    }
+
+    /**
+     * Build the speech-synthesis model for `model`, mirroring `getLanguage`.
+     *
+     * Same contract and same reason for existing: the upstream SDK is constructed
+     * from credentials held in this service, so a caller gets synthesis without
+     * ever seeing the key. Cached separately from language models because the two
+     * keyspaces would otherwise collide on a provider that offers both under one
+     * id.
+     */
+    const getSpeech = Effect.fn("Provider.getSpeech")(function* (model: Model) {
+      if (isFreeApiSunset() && isFreeApiModel({ providerID: model.providerID, modelID: model.id })) {
+        throw new Error("MiMo free API service has ended. Sign in or configure a third-party API.")
+      }
+      const s = yield* InstanceState.get(state)
+      const envs = yield* env.all()
+      const key = `${model.providerID}/${model.id}`
+      if (s.speech.has(key)) return s.speech.get(key)!
+
+      return yield* Effect.promise(async () => {
+        const sdk = await resolveSDK(model, s, envs)
+        const factory = speechFactory(sdk)
+        // Deliberately NOT a ModelNotFoundError: the model may well exist, and
+        // saying "not found" would send the caller looking for a typo. What is
+        // missing is the provider's capability — `@ai-sdk/openai-compatible`, the
+        // package behind every custom endpoint, ships no speech factory at all.
+        if (!factory)
+          throw new SpeechUnsupportedError({ modelID: model.id, providerID: model.providerID, npm: model.api.npm })
+
+        // No `modelLoaders` lookup here, unlike `getLanguage`: those loaders are
+        // registered to build LANGUAGE models and have the wrong return type.
+        try {
+          const speech = factory.call(sdk, model.api.id)
+          s.speech.set(key, speech)
+          return speech
+        } catch (e) {
+          if (e instanceof NoSuchModelError)
+            throw new ModelNotFoundError({ modelID: model.id, providerID: model.providerID }, { cause: e })
+          throw e
+        }
+      })
+    })
+
     const closest = Effect.fn("Provider.closest")(function* (providerID: ProviderID, query: string[]) {
       const s = yield* InstanceState.get(state)
       const provider = s.providers[providerID]
@@ -1865,7 +1971,7 @@ const layer: Layer.Layer<
       return yield* resolveModelRef("lite", providerID)
     })
 
-    const getVisionModel = Effect.fn("Provider.getVisionModel")(function* () {
+    const getVisionModel = Effect.fn("Provider.getVisionModel")(function* (providerID?: ProviderID) {
       const cfg = yield* config.get()
       // Explicit vision_model literal wins. getModel raises ModelNotFoundError as
       // a defect, so a misconfigured vision_model must not propagate — catch it and
@@ -1875,11 +1981,12 @@ const layer: Layer.Layer<
         const explicit = yield* getModel(parsed.providerID, parsed.modelID).pipe(
           Effect.catchDefect(() => Effect.succeed(undefined)),
         )
-        if (explicit) return explicit
+        if (explicit && (!providerID || explicit.providerID === providerID)) return explicit
       }
       // Smart default: in-house preferred, then cheapest vision-capable model.
       const providers = yield* list()
       const vision = Object.values(providers)
+        .filter((info) => !providerID || info.id === providerID)
         .flatMap((info) => Object.values(info.models))
         .filter((m) => m.capabilities.input.image === true)
       return sortVisionModels(vision)[0]
@@ -1924,7 +2031,7 @@ const layer: Layer.Layer<
       }
     })
 
-    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, getVisionModel, defaultModel, resolveModelRef })
+    return Service.of({ list, getProvider, getModel, getLanguage, getSpeech, closest, getSmallModel, getVisionModel, defaultModel, resolveModelRef })
   }),
 )
 
@@ -1956,12 +2063,72 @@ export function parseModel(model: string) {
   }
 }
 
+/**
+ * What kind of model this is, DERIVED from its declared modalities.
+ *
+ * `Model` carries no `type` field — everything is otherwise assumed to be a
+ * language model — but `capabilities.input`/`output` already distinguish them, fed
+ * either from models.dev or from the user's own per-model `modalities` config.
+ * Deriving beats adding a field: a model absent from models.dev (OpenAI's `tts-1`
+ * is) is already declarable today as
+ * `"modalities": { "input": ["text"], "output": ["audio"] }`.
+ *
+ * The two tie-breaks are what make this safe against real registry data:
+ *
+ *  - Audio AND text output is a live/multimodal chat model (Gemini live,
+ *    `lyria-3-pro`), not a synthesizer, so TEXT OUTPUT WINS.
+ *  - Audio input with TEXT INPUT TOO is a multimodal chat model that happens to
+ *    hear (`mimo-v2.5` declares `input: [text, image, audio, video]`, every Gemini
+ *    does the same), not a transcriber. Only audio-in-without-text-in is ASR —
+ *    which is exactly how `whisper-large-v3` is declared: `input: ["audio"]`.
+ *
+ * Without the second guard every multimodal chat model in the registry would be
+ * classified as a transcription model and routed away from chat.
+ *
+ * Not derivable: embedding models. `text-embedding-3-small` reports
+ * `output: ["text"]`, indistinguishable from a chat model. Misusing one still
+ * fails at the provider.
+ */
+export type ModelKind = "language" | "speech" | "transcription"
+
+export function modelKind(model: Model): ModelKind {
+  const input = model.capabilities.input
+  const output = model.capabilities.output
+  if (output.audio && !output.text) return "speech"
+  if (input.audio && !input.text && output.text) return "transcription"
+  return "language"
+}
+
+export function isSpeechModel(model: Model) {
+  return modelKind(model) === "speech"
+}
+
+export function isTranscriptionModel(model: Model) {
+  return modelKind(model) === "transcription"
+}
+
 export const ModelNotFoundError = NamedError.create(
   "ProviderModelNotFoundError",
   z.object({
     providerID: ProviderID.zod,
     modelID: ModelID.zod,
     suggestions: z.array(z.string()).optional(),
+  }),
+)
+
+/**
+ * The model exists; the provider package behind it cannot synthesize speech.
+ *
+ * Separate from `ModelNotFoundError` so a caller is not told to go hunting for a
+ * typo. `npm` is carried because the answer is almost always "that package has no
+ * speech factory" rather than anything about the model.
+ */
+export const SpeechUnsupportedError = NamedError.create(
+  "ProviderSpeechUnsupportedError",
+  z.object({
+    providerID: ProviderID.zod,
+    modelID: ModelID.zod,
+    npm: z.string(),
   }),
 )
 
