@@ -18,6 +18,18 @@ import { Log } from "../util"
 import { Discovery } from "./discovery"
 import { extractComposeBundle } from "./compose/extract"
 import { extractBuiltinBundle, OFFICIAL_SKILL_NAMES } from "./builtin/extract"
+import { performance } from "node:perf_hooks"
+import * as nodeFs from "node:fs"
+
+const TTFT_PROBE = process.env.MIMOCODE_TTFT_PROBE === "1"
+const TTFT_PROBE_FILE =
+  process.env.MIMOCODE_TTFT_PROBE_FILE ?? "D:/gitProject/testCAD/portable/AgentServer/test/results/ttft-probe.log"
+const ttftProbe = (phase: string, ms: number, extra?: Record<string, unknown>) => {
+  if (!TTFT_PROBE) return
+  try {
+    nodeFs.appendFileSync(TTFT_PROBE_FILE, JSON.stringify({ ts: Date.now(), phase, ms: Math.round(ms * 100) / 100, ...extra }) + "\n")
+  } catch {}
+}
 
 const log = Log.create({ service: "skill" })
 const EXTERNAL_DIRS = [".claude", ".agents", ".codex", ".opencode"]
@@ -176,14 +188,20 @@ const scan = Effect.fnUntraced(function* (
 const discoverStableSkills = Effect.fnUntraced(function* (
   fsys: AppFileSystem.Interface,
 ) {
+  // Real-execution timing: this generator runs lazily on the first request that
+  // pulls `stable`, which is where cold-start cost actually lands. (An earlier
+  // probe in the layer ctor only measured handle creation: always ~0ms.)
+  const t0 = performance.now()
   const state: ScanState = { matches: new Set(), dirs: new Set() }
   const bundledRoots: string[] = []
 
   // Extract builtin skills to disk first (user skills with same name override)
   if (!Flag.MIMOCODE_DISABLE_BUILTIN_SKILLS) {
+    const tExtract0 = performance.now()
     const builtinSkillRoot = yield* extractBuiltinBundle(fsys).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     )
+    ttftProbe("skill.extractBuiltin", performance.now() - tExtract0)
     if (builtinSkillRoot && (yield* fsys.isDir(builtinSkillRoot))) {
       bundledRoots.push(builtinSkillRoot)
       yield* scan(state, builtinSkillRoot, BUILTIN_SKILL_PATTERN, { scope: "builtin" })
@@ -204,9 +222,11 @@ const discoverStableSkills = Effect.fnUntraced(function* (
 
   // Extract compose skills to disk (user skills with same name override)
   if (!Flag.MIMOCODE_DISABLE_COMPOSE_SKILLS) {
+    const tExtract0 = performance.now()
     const composeSkillRoot = yield* extractComposeBundle(fsys).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     )
+    ttftProbe("skill.extractCompose", performance.now() - tExtract0)
     if (composeSkillRoot && (yield* fsys.isDir(composeSkillRoot))) {
       bundledRoots.push(composeSkillRoot)
       yield* scan(state, composeSkillRoot, SKILL_PATTERN, { scope: "compose" })
@@ -229,6 +249,7 @@ const discoverStableSkills = Effect.fnUntraced(function* (
     }
   }
 
+  ttftProbe("skill.discoverStable", performance.now() - t0)
   return {
     matches: Array.from(state.matches),
     dirs: Array.from(state.dirs),
@@ -326,7 +347,9 @@ export const layer = Layer.effect(
     const state = yield* InstanceState.make(
       Effect.fn("Skill.state")(function* (ctx) {
         const s: State = { skills: {}, dirs: new Set() }
+        const tLoad0 = performance.now()
         yield* loadSkills(s, yield* InstanceState.get(discovered), bus)
+        ttftProbe("skill.load", performance.now() - tLoad0, { skills: Object.keys(s.skills).length })
         return s
       }),
     )

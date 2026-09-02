@@ -7,6 +7,13 @@ export const ModelCall = BusEvent.define(
     sessionID: z.string(),
     finish_reason: z.string(),
     ttft_ms: z.number().optional(),
+    // Per-step prep latency: stream start (start-step) − step processing start
+    // in the run loop (resolveTools, prefix build, ...). Only set when the
+    // caller recorded the step's prep start.
+    prep_ms: z.number().optional(),
+    // Prompt-entry → stream start, FIRST step of a turn only (the caller passes
+    // promptEntryAt exclusively there).
+    prompt_to_stream_ms: z.number().optional(),
     latency_ms: z.number(),
     cached_read_tokens: z.number(),
     model_id: z.string(),

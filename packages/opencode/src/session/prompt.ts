@@ -84,7 +84,7 @@ import { ConfigMarkdown, ConfigCompose } from "../config"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@mimo-ai/shared/util/error"
 import { SessionProcessor } from "./processor"
-import { buildLLMRequestPrefix } from "./llm-request-prefix"
+import { buildLLMRequestPrefix, type PrefixToolCache } from "./llm-request-prefix"
 import {
   buildAutoWorktreeNotice,
   firstMutatedMainWorktree,
@@ -1465,6 +1465,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       task_id?: string
       mcpContext: MCP.TurnContext
       harness?: MessageV2.User["harness"]
+      /**
+       * Same-step memoization carrier. When set, the resolved registry defs and
+       * the transformed JSON schemas are published into it so the later
+       * buildLLMRequestPrefix call in this step reuses them (see PrefixToolCache).
+       */
+      cache?: PrefixToolCache
     }) {
       using _ = log.time("resolveTools")
       const tools: Record<string, AITool> = {}
@@ -1604,15 +1610,23 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       // Keep every authorized definition in the AI SDK tool map so an unadvertised
       // direct call still resolves. `activeTools` below is the separate provider-
       // facing schema allowlist and stays compact in Codex mode.
-      for (const item of yield* registry.registered({
+      const registeredDefs = yield* registry.registered({
         modelID: input.model.id,
         apiModelID: input.model.api.id,
         family: input.model.family,
         providerID: input.model.providerID,
         agent: input.agent,
         harness: input.harness,
-      })) {
-        const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      })
+      // Publish into the same-step cache so buildLLMRequestPrefix (called later in
+      // this step) reuses these defs instead of re-running definitions().
+      if (input.cache) input.cache.registeredDefs = registeredDefs
+      for (const item of registeredDefs) {
+        let schema = input.cache?.schemas?.get(item.id)
+        if (!schema) {
+          schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+          input.cache?.schemas?.set(item.id, schema)
+        }
         tools[item.id] = tool({
           description: item.description,
           inputSchema: jsonSchema(schema),
@@ -2918,6 +2932,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     const prompt: (input: PromptInput) => Effect.Effect<MessageV2.WithParts> = Effect.fn("SessionPrompt.prompt")(
       function* (input: PromptInput) {
+        // Turn-level TTFT anchor: the segmented timing published on the first
+        // step's Metrics.ModelCall (prompt_to_stream_ms) and the one-shot
+        // first-token log both measure from here.
+        const promptEntryAt = Date.now()
         const session = yield* sessions.get(input.sessionID)
         if (input.source !== "spawn" && input.source !== "hook") {
           yield* revert.cleanup(session)
@@ -2964,6 +2982,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           agentID: input.agentID ?? "main",
           task_id: input.task_id,
           titleLocale: input.titleLocale,
+          promptEntryAt,
         })
       },
     )
@@ -3027,8 +3046,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       task_id?: string,
       notifyParentOnComplete?: boolean,
       titleLocale?: string,
+      promptEntryAt?: number,
     ) => Effect.Effect<MessageV2.WithParts> = Effect.fn("SessionPrompt.run")(
-      function* (sessionID: SessionID, agentID?: string, task_id?: string, notifyParentOnComplete?: boolean, titleLocale?: string) {
+      function* (sessionID: SessionID, agentID?: string, task_id?: string, notifyParentOnComplete?: boolean, titleLocale?: string, promptEntryAt?: number) {
         const ctx = yield* InstanceState.context
         const slog = elog.with({ sessionID })
         let structured: unknown | undefined
@@ -3062,6 +3082,19 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         let cancelled = false
         let cancelReason: string | undefined
         let lastSystemPrompt: string[] | undefined = undefined
+
+        // Per-run memo of instruction.system(). currentAdditions() re-reads the
+        // instruction files from disk on every call (2-3x per step: prefix build,
+        // rotate rebuild, debug capture). Within a single run the bytes are stable
+        // and a byte-stable prefix is what provider prompt caches want. Strictly
+        // scoped to THIS runLoop invocation — a new prompt()/resume() turn re-reads
+        // from disk. SessionPrefixSnapshot freeze/rotate semantics are untouched:
+        // the memo only deduplicates reads within the run.
+        let instructionMemo: { paths: Set<string>; content: string[] } | undefined
+        const instructionSystem = Effect.fn("SessionPrompt.instructionSystem")(function* () {
+          if (!instructionMemo) instructionMemo = yield* instruction.system().pipe(Effect.orDie)
+          return instructionMemo
+        })
 
         // Fires session.post exactly once via Effect.onExit on the body below.
         // Without this wrapper any yielded failure inside the while loop (provider
@@ -3611,6 +3644,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           // text-loop recovery user, but must not block a later re-crop if the
           // model loops again after recovery.
           loopStreakCropped = false
+          // Step-processing start for the TTFT segmentation: everything from here
+          // to the stream's start-step (history filter, tool resolution, prefix
+          // build, ...) is reported as prep_ms on this step's ModelCall metric.
+          const stepPrepStartedAt = Date.now()
           // F55: only main agent sets session status to busy; subagent runners
           // must not touch session-level status (Runner.onBusy is Effect.void
           // for non-main actors per F47).
@@ -4144,12 +4181,23 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             sessionID,
             model,
             agentMetrics,
+            // TTFT segmentation: prep_ms on every step; prompt_to_stream_ms only
+            // via the turn's first step (promptEntryAt is unset on later steps and
+            // on resume paths, which keeps the first-token log one-shot per turn).
+            prepStartedAt: stepPrepStartedAt,
+            ...(step === 1 && promptEntryAt !== undefined ? { promptEntryAt } : {}),
           })
 
           const outcome: "break" | "continue" = yield* Effect.gen(function* () {
             const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
             const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
 
+            // Per-step tool-def/schema cache: resolveTools populates it from
+            // registry.registered(); the buildLLMRequestPrefix calls below reuse it
+            // so definitions() + zod→JSONSchema don't run twice per step. Scoped to
+            // ONE iteration — registry.reload() can fire mid-run (extension write),
+            // so caching across steps would serve stale tool sets.
+            const toolCache: PrefixToolCache = { schemas: new Map() }
             const resolvedTools = yield* resolveTools({
               agent,
               session,
@@ -4162,6 +4210,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               task_id,
               mcpContext,
               harness: lastUser.harness,
+              cache: toolCache,
             })
             const tools = resolvedTools.tools
             const activeTools = resolvedTools.activeTools
@@ -4439,7 +4488,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                   ? sys.environment(model, session.time.created, sessionPrompt.harness)
                   : Effect.succeed([]),
                 sys.skills({ ...agent, permission: runtimePermission }),
-                instruction.system().pipe(Effect.orDie),
+                // Per-run memo (see instructionSystem above): avoids re-reading the
+                // instruction files from disk on every call within this run.
+                instructionSystem(),
               ])
               if (!session.parentID && !instructionsNotified.has(sessionID)) {
                 instructionsNotified.add(sessionID)
@@ -4478,6 +4529,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               // Rebuild tails collapse into an activity log so hollow
               // tool_results never look like a live transcript (anti-hallucination).
               collapseCheckpointTail: true,
+              toolCache,
             }).pipe(
               Effect.provideService(LLM.Service, llm),
               Effect.provideService(ToolRegistry.Service, registry),
@@ -4503,6 +4555,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 additions: yield* currentAdditions(),
                 prompt: sessionPrompt,
                 collapseCheckpointTail: true,
+                toolCache,
               }).pipe(
                 Effect.provideService(LLM.Service, llm),
                 Effect.provideService(ToolRegistry.Service, registry),
@@ -4948,7 +5001,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         input.sessionID,
         agentID,
         lastAssistant(input.sessionID, agentID),
-        runLoop(input.sessionID, agentID, input.task_id, input.notifyParentOnComplete, input.titleLocale),
+        runLoop(input.sessionID, agentID, input.task_id, input.notifyParentOnComplete, input.titleLocale, input.promptEntryAt),
       )
     })
 
@@ -5515,6 +5568,9 @@ export const LoopInput = z.object({
   // the FIRST/spawn turn). Left false on spawn/user-driven loops to avoid
   // double-notifying the spawn turn that forkWork already covers.
   notifyParentOnComplete: z.boolean().optional(),
+  // Turn-level TTFT anchor (Date.now() at SessionPrompt.prompt entry). Observability
+  // only; never set by resume paths.
+  promptEntryAt: z.number().optional(),
 })
 
 export const ShellInput = z.object({

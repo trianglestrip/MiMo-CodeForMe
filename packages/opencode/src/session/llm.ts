@@ -28,6 +28,18 @@ import { Installation } from "@/installation"
 import { InstallationVersion } from "@/installation/version"
 import { EffectBridge } from "@/effect"
 import { Global } from "@/global"
+import { performance } from "node:perf_hooks"
+import * as nodeFs from "node:fs"
+
+const TTFT_PROBE = process.env.MIMOCODE_TTFT_PROBE === "1"
+const TTFT_PROBE_FILE =
+  process.env.MIMOCODE_TTFT_PROBE_FILE ?? "D:/gitProject/testCAD/portable/AgentServer/test/results/ttft-probe.log"
+const ttftProbe = (phase: string, ms: number, extra?: Record<string, unknown>) => {
+  if (!TTFT_PROBE) return
+  try {
+    nodeFs.appendFileSync(TTFT_PROBE_FILE, JSON.stringify({ ts: Date.now(), phase, ms: Math.round(ms * 100) / 100, ...extra }) + "\n")
+  } catch {}
+}
 import * as Option from "effect/Option"
 import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { ActorRegistry } from "@/actor/registry"
@@ -355,6 +367,7 @@ const live: Layer.Layer<
       agentID?: string
       ephemeral?: boolean
     }) {
+      const tBuild0 = performance.now()
       // "Is this a main/peer actor" — the single judgement two sections below key
       // on (replace-agent base override + memory instructions). Injected only for
       // actors whose context the checkpoint flow serves — main + peer. Subagents
@@ -482,7 +495,9 @@ const live: Layer.Layer<
       // spares subagents/providers a stray extra system turn. Join with a blank
       // line (\n\n) so adjacent markdown sections (base prompt, "# Memory system")
       // don't run together into one heading.
-      return system.length <= 1 ? system : [system.filter((x) => x).join("\n\n")]
+      const result = system.length <= 1 ? system : [system.filter((x) => x).join("\n\n")]
+      ttftProbe("llm.buildSystemArray", performance.now() - tBuild0, { len: result[0]?.length ?? 0 })
+      return result
     })
 
     const run = Effect.fn("LLM.run")(function* (input: StreamRequest) {

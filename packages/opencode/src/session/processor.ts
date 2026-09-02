@@ -156,6 +156,19 @@ type Input = {
   sessionID: SessionID
   model: Provider.Model
   agentMetrics?: AgentMetrics
+  /**
+   * Wall-clock timestamp (Date.now()) captured when this step's processing began
+   * in the run loop (history filter, tool resolution, prefix build, ...).
+   * Enables the `prep_ms` segment on the ModelCall metric: stream start
+   * (start-step) − prep start. Optional; omitted by callers that don't track it.
+   */
+  prepStartedAt?: number
+  /**
+   * Wall-clock timestamp captured at SessionPrompt.prompt entry. Passed ONLY for
+   * the first step of a turn; enables `prompt_to_stream_ms` on the ModelCall
+   * metric and the one-shot first-token segmentation log.
+   */
+  promptEntryAt?: number
 }
 
 export interface Interface {
@@ -179,6 +192,9 @@ interface ProcessorContext extends Input {
   reasoningMap: Record<string, MessageV2.ReasoningPart>
   stepStartedAt: number | undefined
   firstTokenAt: number | undefined
+  prepStartedAt: number | undefined
+  promptEntryAt: number | undefined
+  ttftLogged: boolean
   stepPartIds: PartID[]
   textNgramMonitor: TextNgramMonitor | undefined
   textNgramRepeat: boolean
@@ -237,6 +253,9 @@ export const layer: Layer.Layer<
         reasoningMap: {},
         stepStartedAt: undefined,
         firstTokenAt: undefined,
+        prepStartedAt: input.prepStartedAt,
+        promptEntryAt: input.promptEntryAt,
+        ttftLogged: false,
         stepPartIds: [],
         textNgramMonitor: undefined,
         textNgramRepeat: false,
@@ -412,6 +431,20 @@ export const layer: Layer.Layer<
         if (ctx.textNgramMonitor.append(text)) ctx.textNgramRepeat = true
       }
 
+      // One-shot per turn: on the first delta of the step that carries
+      // promptEntryAt (i.e. the turn's first step), log the segmented
+      // prompt-entry → stream-start → first-token latencies. Pure observation.
+      const logFirstToken = () => {
+        if (ctx.ttftLogged || !ctx.promptEntryAt) return
+        if (!ctx.firstTokenAt || !ctx.stepStartedAt) return
+        ctx.ttftLogged = true
+        slog.info("first-token", {
+          promptToStreamMs: ctx.stepStartedAt - ctx.promptEntryAt,
+          streamToFirstTokenMs: ctx.firstTokenAt - ctx.stepStartedAt,
+          promptToFirstTokenMs: ctx.firstTokenAt - ctx.promptEntryAt,
+        })
+      }
+
       const handleEvent = Effect.fnUntraced(function* (value: StreamEvent) {
         switch (value.type) {
           case "start":
@@ -438,6 +471,7 @@ export const layer: Layer.Layer<
 
           case "reasoning-delta":
             if (!ctx.firstTokenAt) ctx.firstTokenAt = Date.now()
+            logFirstToken()
             if (!(value.id in ctx.reasoningMap)) return
             ctx.reasoningMap[value.id].text += value.text
             checkTextNgram(value.text)
@@ -627,6 +661,9 @@ export const layer: Layer.Layer<
                 sessionID: ctx.sessionID,
                 finish_reason: value.finishReason,
                 ttft_ms: ctx.firstTokenAt && ctx.stepStartedAt ? ctx.firstTokenAt - ctx.stepStartedAt : undefined,
+                prep_ms: ctx.stepStartedAt && ctx.prepStartedAt ? ctx.stepStartedAt - ctx.prepStartedAt : undefined,
+                prompt_to_stream_ms:
+                  ctx.stepStartedAt && ctx.promptEntryAt ? ctx.stepStartedAt - ctx.promptEntryAt : undefined,
                 latency_ms: ctx.stepStartedAt ? Date.now() - ctx.stepStartedAt : 0,
                 cached_read_tokens: usage.tokens.cache.read,
                 model_id: ctx.model.id,
@@ -665,6 +702,7 @@ export const layer: Layer.Layer<
 
           case "text-delta":
             if (!ctx.firstTokenAt) ctx.firstTokenAt = Date.now()
+            logFirstToken()
             if (!ctx.currentText) return
             if (!value.text) return
             if (!ctx.textPartPersisted) {

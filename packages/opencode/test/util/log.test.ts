@@ -340,3 +340,50 @@ test("print mode is unaffected by an unusable log directory", async () => {
   expect(result.stderr).toContain("printed record")
   expect(result.stderr).not.toContain("failed")
 })
+
+// Regression: clone() used to return the SAME per-service singleton, so every
+// SessionProcessor's `log.clone().tag("session.id", ...).tag("messageID", ...)`
+// mutated one shared tag object. While a parent agent and a subagent streamed
+// concurrently, the second create overwrote the first's tags and the subagent's
+// `first-token` line was emitted with the parent session's IDs — exactly the
+// "same messageID logged with two first-token lines" false alarm.
+test("cloned loggers keep their own tags under concurrent use", async () => {
+  await using tmp = await tmpdir()
+  Global.Path.log = tmp.path
+  await Log.init({ print: false })
+
+  const base = Log.create({ service: "session.processor" })
+  const parent = base.clone().tag("session.id", "ses_parent").tag("messageID", "msg_parent")
+  const child = base.clone().tag("session.id", "ses_child").tag("messageID", "msg_child")
+  parent.info("first-token", { promptToStreamMs: 2926 })
+  child.info("first-token", { promptToStreamMs: 3069 })
+  await Log.flush()
+
+  const lines = (await fs.readFile(Log.file(), "utf8")).split("\n").filter((line) => line.includes("first-token"))
+  expect(lines).toHaveLength(2)
+  expect(lines[0]).toContain("ses_parent")
+  expect(lines[0]).toContain("msg_parent")
+  expect(lines[1]).toContain("ses_child")
+  expect(lines[1]).toContain("msg_child")
+})
+
+test("tagging a clone never leaks back into the base logger", async () => {
+  await using tmp = await tmpdir()
+  Global.Path.log = tmp.path
+  await Log.init({ print: false })
+
+  const base = Log.create({ service: "log-clone-isolation-probe" })
+  base.clone().tag("request.id", "req-1").info("from clone")
+  base.info("from base")
+  await Log.flush()
+
+  const lines = (await fs.readFile(Log.file(), "utf8")).split("\n")
+  const cloneLine = lines.find((line) => line.includes("from clone"))
+  const baseLine = lines.find((line) => line.includes("from base"))
+  expect(cloneLine).toContain("req-1")
+  expect(baseLine).not.toContain("req-1")
+})
+
+test("module-level create stays cached per service", () => {
+  expect(Log.create({ service: "log-cache-probe" })).toBe(Log.create({ service: "log-cache-probe" }))
+})

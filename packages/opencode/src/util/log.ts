@@ -263,7 +263,10 @@ function formatError(error: Error, depth = 0): string {
 
 let last = Date.now()
 export function create(tags?: Record<string, any>) {
-  tags = tags || {}
+  // Own the tags object: callers may pass anything, and `.tag()` below mutates
+  // it, so aliasing a caller-held object (or another logger's tags) would make
+  // one logger's tags silently rewrite another's output.
+  tags = { ...(tags ?? {}) }
 
   const service = tags["service"]
   if (service && typeof service === "string") {
@@ -273,6 +276,24 @@ export function create(tags?: Record<string, any>) {
     }
   }
 
+  const result = make(tags)
+  if (service && typeof service === "string") {
+    loggers.set(service, result)
+  }
+  return result
+}
+
+// Builds a standalone logger that exclusively owns its `tags` object. It never
+// consults nor populates the per-service cache, so derived loggers (`clone()`)
+// are fully independent: one logger's `.tag()` can never rewrite another
+// logger's output. This is load-bearing for concurrent use — SessionProcessor
+// clones a logger per streamed message (`log.clone().tag("session.id", ...)`),
+// and a parent agent + subagent streaming at the same time each need their own
+// session.id/messageID tags. With the previous cache-on-clone behavior both
+// clones resolved to the SAME service singleton and last-writer-won, so the
+// subagent's `first-token` line was emitted with the parent session's IDs and
+// looked like the same turn had been processed twice.
+function make(tags: Record<string, any>): Logger {
   function build(message: any, extra?: Record<string, any>) {
     const prefix = Object.entries({
       ...tags,
@@ -313,11 +334,11 @@ export function create(tags?: Record<string, any>) {
       }
     },
     tag(key: string, value: string) {
-      if (tags) tags[key] = value
+      tags[key] = value
       return result
     },
     clone() {
-      return create({ ...tags })
+      return make({ ...tags })
     },
     time(message: string, extra?: Record<string, any>) {
       const now = Date.now()
@@ -336,10 +357,6 @@ export function create(tags?: Record<string, any>) {
         },
       }
     },
-  }
-
-  if (service && typeof service === "string") {
-    loggers.set(service, result)
   }
 
   return result

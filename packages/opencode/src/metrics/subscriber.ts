@@ -23,6 +23,8 @@ export const subscribe = Effect.fn("Metrics.subscribe")(function* () {
         return send("model_call", p.sessionID, {
           finish_reason: p.finish_reason,
           ttft_ms: p.ttft_ms,
+          prep_ms: p.prep_ms,
+          prompt_to_stream_ms: p.prompt_to_stream_ms,
           latency_ms: p.latency_ms,
           cached_read_tokens: p.cached_read_tokens,
           model_id: p.model_id,

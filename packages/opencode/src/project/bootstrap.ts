@@ -16,13 +16,27 @@ import { Config } from "@/config"
 import { Metrics } from "@/metrics"
 import { Memory } from "@/memory"
 import { WriterService, BackfillService } from "@/history"
+import { performance } from "node:perf_hooks"
+import * as nodeFs from "node:fs"
+
+const TTFT_PROBE = process.env.MIMOCODE_TTFT_PROBE === "1"
+const TTFT_PROBE_FILE =
+  process.env.MIMOCODE_TTFT_PROBE_FILE ?? "D:/gitProject/testCAD/portable/AgentServer/test/results/ttft-probe.log"
+const ttftProbe = (phase: string, ms: number, extra?: Record<string, unknown>) => {
+  if (!TTFT_PROBE) return
+  try {
+    nodeFs.appendFileSync(TTFT_PROBE_FILE, JSON.stringify({ ts: Date.now(), phase, ms: Math.round(ms * 100) / 100, ...extra }) + "\n")
+  } catch {}
+}
 
 export const InstanceBootstrap = Effect.gen(function* () {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   // everything depends on config so eager load it for nice traces
   yield* Config.Service.use((svc) => svc.get())
   // Plugin can mutate config so it has to be initialized before anything else.
+  const tPlugin0 = performance.now()
   yield* Plugin.Service.use((svc) => svc.init())
+  ttftProbe("plugin.init", performance.now() - tPlugin0)
   yield* Effect.all(
     [
       LSP.Service,

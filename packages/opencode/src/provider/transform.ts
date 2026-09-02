@@ -1751,6 +1751,13 @@ export function options(input: {
   if (input.model.providerID === "openrouter") {
     result["prompt_cache_key"] = input.sessionID
   }
+  // Probe (2026-09-01) against open.bigmodel.cn /chat/completions (coding plan):
+  // a streaming request carrying top-level `prompt_cache_key` is accepted with
+  // 200 (control without the field also 200), so session-stable cache keys are
+  // safe to send.
+  if (input.model.providerID === "zhipuai-coding-plan") {
+    result["prompt_cache_key"] = input.sessionID
+  }
   if (input.model.api.npm === "@ai-sdk/gateway") {
     result["gateway"] = {
       caching: "auto",
