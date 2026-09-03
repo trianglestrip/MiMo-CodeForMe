@@ -159,7 +159,7 @@ describe("assistant messages", () => {
     ])
   })
 
-  test("should handle assistant message with null content when only tool calls", () => {
+  test("should send empty string content when only tool calls (no null on wire)", () => {
     const result = convertToCopilotMessages([
       {
         role: "assistant",
@@ -177,7 +177,7 @@ describe("assistant messages", () => {
     expect(result).toEqual([
       {
         role: "assistant",
-        content: null,
+        content: "",
         tool_calls: [
           {
             id: "call1",
@@ -206,6 +206,43 @@ describe("assistant messages", () => {
     ])
 
     expect(result[0].content).toBe("First part. Second part.")
+  })
+
+  test("should replay openaiCompatible.reasoning_content verbatim (prefix stability)", () => {
+    const result = convertToCopilotMessages([
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "答案" }],
+        providerOptions: {
+          openaiCompatible: { reasoning_content: "思考过程原文" },
+        },
+      },
+    ])
+
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: "答案",
+        tool_calls: undefined,
+        reasoning_text: undefined,
+        reasoning_opaque: undefined,
+        reasoning_content: "思考过程原文",
+      },
+    ])
+  })
+
+  test("should replay empty reasoning_content as well (interleaved transform always sets it)", () => {
+    const result = convertToCopilotMessages([
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "直接回答" }],
+        providerOptions: {
+          openaiCompatible: { reasoning_content: "" },
+        },
+      },
+    ])
+
+    expect(result[0]).toMatchObject({ reasoning_content: "" })
   })
 })
 
@@ -239,7 +276,7 @@ describe("tool calls", () => {
     expect(result).toEqual([
       {
         role: "assistant",
-        content: null,
+        content: "",
         tool_calls: [
           {
             id: "quux",
@@ -468,7 +505,7 @@ describe("reasoning (copilot-specific)", () => {
     expect(result).toEqual([
       {
         role: "assistant",
-        content: null,
+        content: "",
         tool_calls: undefined,
         reasoning_text: "Just thinking, no response yet",
         reasoning_opaque: "sig-abc",

@@ -113,12 +113,21 @@ export function convertToOpenAICompatibleChatMessages(prompt: LanguageModelV3Pro
           }
         }
 
+        // dsh 前缀稳定纪律:interleaved transform 把思考文本逐字挂在消息级
+        // providerOptions.openaiCompatible(空也置位),此处必须原样展开回放——
+        // 与 npm 包 getOpenAIMetadata 的出站行为对齐,否则思考文本不上 wire
+        const openaiCompatible = (
+          message.providerOptions as { openaiCompatible?: Record<string, unknown> } | undefined
+        )?.openaiCompatible
+
         messages.push({
           role: "assistant",
-          content: text || null,
+          // 空内容发 "" 而非 null:null 既被部分网关拒绝,也会写进会话日志破坏后续前缀
+          content: text,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
           reasoning_text: reasoningOpaque ? reasoningText : undefined,
           reasoning_opaque: reasoningOpaque,
+          ...openaiCompatible,
           ...metadata,
         })
 
