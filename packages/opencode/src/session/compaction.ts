@@ -16,6 +16,7 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { Effect, Layer, Context } from "effect"
 import { InstanceState } from "@/effect"
 import { isOverflow as overflow, usable } from "./overflow"
+import { prefixCaptureRef } from "./prefix-capture-ref"
 import { makeRuntime } from "@/effect/run-service"
 import { fn } from "@/util/fn"
 
@@ -376,14 +377,51 @@ export const layer: Layer.Layer<
         sessionID: input.sessionID,
         model,
       })
+      // dsh 前缀复用(同款 bug 修复):压缩请求若用「同模型 + 异 system + 空 tools」,
+      // 整条历史前缀缓存对该请求全失效、全价重算。改为逐字节复用主对话冻结前缀
+      // (同 system + 同 tools + 同序历史渲染),压缩指令留在尾部 user 消息,
+      // toolChoice "none" 防止模型在压缩回合真调工具。
+      // 无冻结快照/捕获不可用时回退旧行为。collapseCheckpointTail 与主 runLoop
+      // 的请求渲染保持字节一致(checkpoint 写入 fork 不传,此处传 true)。
+      const capture = prefixCaptureRef.current
+      // 主对话 runLoop 的快照键以 agent **名**(info.agent,如 "build")解析;
+      // agentID("main")是会话 actor id,不是注册表键,拿它查 agents.get 会落空
+      const lastMainUser = msgs.findLast((m) => m.info.role === "user")
+      const mainAgentName = lastMainUser?.info.agent ?? lastMainUser?.info.agentID ?? "main"
+      const frozenPrefix = capture
+        ? yield* capture({
+            sessionID: input.sessionID,
+            agentName: mainAgentName,
+            providerID: model.providerID,
+            modelID: model.id,
+            msgs: msgs as unknown[],
+            collapseCheckpointTail: true,
+          })
+        : undefined
+      const reusePrefix =
+        frozenPrefix !== undefined &&
+        frozenPrefix.system.length > 0 &&
+        frozenPrefix.inheritedMessages.length > 0
+      log.info("compaction.prefix", {
+        reused: reusePrefix,
+        systemLines: frozenPrefix?.system.length ?? 0,
+        tools: Object.keys(frozenPrefix?.tools ?? {}).length,
+      })
       const result = yield* processor.process({
         user: userMessage,
         agent,
         sessionID: input.sessionID,
-        tools: {},
-        system: [],
+        ...(() => {
+          if (!reusePrefix || !frozenPrefix) return { tools: {}, system: [] as string[] }
+          return {
+            tools: frozenPrefix.tools,
+            system: frozenPrefix.system,
+            // 同 system+同 tools 只为字节复用主对话前缀;压缩回合不允许真调工具
+            toolChoice: "none" as const,
+          }
+        })(),
         messages: [
-          ...modelMessages,
+          ...(reusePrefix && frozenPrefix ? frozenPrefix.inheritedMessages : modelMessages),
           {
             role: "user",
             content: [{ type: "text", text: prompt }],

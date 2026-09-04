@@ -527,6 +527,7 @@ export const layer = Layer.effect(
           additions,
           prebuiltSystem: frozen?.system,
           prompt: capturePrompt,
+          collapseCheckpointTail: input.collapseCheckpointTail,
         }).pipe(
           Effect.provideService(LLM.Service, llm),
           Effect.provideService(ToolRegistry.Service, registry),

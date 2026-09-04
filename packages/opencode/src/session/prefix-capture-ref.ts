@@ -43,6 +43,8 @@ export type PrefixCaptureFn = (input: {
   // `MessageV2.WithParts[]` but importing that type here would
   // re-introduce the SessionCheckpoint↔ToolRegistry cycle.
   msgs: unknown[]
+  /** Byte-parity with the main runLoop's rendering (it passes true); checkpoint writer omits it. */
+  collapseCheckpointTail?: boolean
 }) => Effect.Effect<PrefixCaptureResult, never>
 
 export const prefixCaptureRef: { current: PrefixCaptureFn | undefined } = { current: undefined }
